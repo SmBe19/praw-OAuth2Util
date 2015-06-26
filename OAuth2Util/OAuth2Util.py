@@ -41,7 +41,7 @@ class OAuth2UtilRequestHandler(BaseHTTPRequestHandler):
 
 class OAuth2Util:
 
-	def __init__(self, reddit, oauthappinfo_configfile = "oauthappinfo.txt", oauthconfig_configfile = "oauthconfig.txt", oauthtoken_configfile = "oauthtoken.txt"):
+	def __init__(self, reddit, oauthappinfo_configfile = "oauthappinfo.txt", oauthconfig_configfile = "oauthconfig.txt", oauthtoken_configfile = "oauthtoken.txt", print_log=False):
 		self.r = reddit
 		self.token = None
 		self.refresh_token = None
@@ -50,6 +50,8 @@ class OAuth2Util:
 		self.refreshable = True
 		self.server = None
 		
+		self._print = print_log
+		
 		self.OAUTHAPPINFO_CONFIGFILE = oauthappinfo_configfile
 		self.OAUTHCONFIG_CONFIGFILE = oauthconfig_configfile
 		self.OAUTHTOKEN_CONFIGFILE = oauthtoken_configfile
@@ -57,13 +59,6 @@ class OAuth2Util:
 		self._read_app_info()
 		self._read_config()
 		self._read_access_credentials()
-		
-		self._print = False
-	
-	def toggle_print(self):
-		self._print = False if self._print else True
-		if self._print:
-			print('Printing on')
 	
 	# ### LOAD SETTINGS ### #
 	
@@ -143,13 +138,20 @@ class OAuth2Util:
 		self.valid_until = time.time() + 3600
 		self._save_token()
 		
-	# ### REFRESH TOKEN ### #
+	# ### PUBLIC API ### #
+	
+	def toggle_print(self):
+		self._print = not self._print
+		if self._print:
+			print('OAuth2Util printing on')
 	
 	def set_access_credentials(self):
 		"""
 		Set the token on the Reddit Object again
 		"""
 		self.r.set_access_credentials(set(self.scopes), self.token, self.refresh_token)
+		
+	# ### REFRESH TOKEN ### #
 	
 	def refresh(self):
 		"""
