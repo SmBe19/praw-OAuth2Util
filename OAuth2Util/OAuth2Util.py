@@ -57,6 +57,13 @@ class OAuth2Util:
 		self._read_app_info()
 		self._read_config()
 		self._read_access_credentials()
+		
+		self._print = False
+	
+	def toggle_print(self):
+		self._print = False if self._print else True
+		if self._print:
+			print('Printing on')
 	
 	# ### LOAD SETTINGS ### #
 	
@@ -85,7 +92,8 @@ class OAuth2Util:
 			self.refresh_token = lines[1]
 			self.r.set_access_credentials(set(self.scopes), self.token, self.refresh_token)
 		except (OSError,  praw.errors.OAuthInvalidToken):
-			print("Request new Token")
+			if self._print:
+				print("Request new Token")
 			self._get_new_access_information()
 			
 	# ### SAVE SETTINGS ### #
@@ -151,7 +159,8 @@ class OAuth2Util:
 		if there might have passed more than one hour
 		"""
 		if time.time() > self.valid_until - REFRESH_MARGIN:
-			print("Refresh Token")
+			if self._print:
+				print("Refresh Token")
 			new_token = self.r.refresh_access_information(self.refresh_token)
 			self.token = new_token["access_token"]
 			self.valid_until = time.time() + 3600
