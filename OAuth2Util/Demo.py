@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 import praw
 import OAuth2Util
 
@@ -6,4 +8,5 @@ o = OAuth2Util.OAuth2Util(r, print_log=True)
 
 o.refresh()
 
-print("Hi, {0}, you have {1} comment karma!".format(r.get_me().name, r.get_me().comment_karma))
+print("Hi, {0}, you have {1} comment karma!".format(
+    r.get_me().name, r.get_me().comment_karma))
