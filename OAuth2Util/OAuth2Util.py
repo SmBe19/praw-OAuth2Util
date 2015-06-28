@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import os
 import time
 import webbrowser
 from threading import Thread
@@ -14,6 +15,7 @@ REFRESH_MARGIN = 60
 REDIRECT_URL = "127.0.0.1"
 REDIRECT_PORT = 65010
 REDIRECT_PATH = "authorize_callback"
+DEFAULT_CONFIG_PATH = os.path.expanduser("~/.praw-oauth-config.txt")
 # ### END CONFIGURATION ### #
 
 
@@ -50,58 +52,39 @@ class OAuth2UtilRequestHandler(BaseHTTPRequestHandler):
 
 class OAuth2Util:
 
-    def __init__(self, reddit, oauthappinfo_configfile="oauthappinfo.txt",
-                 oauthconfig_configfile="oauthconfig.txt",
-                 oauthtoken_configfile="oauthtoken.txt", print_log=False):
+    def __init__(self, reddit, app_key, app_secret, scopes=['identity'],
+                 refreshable=True, oauthtoken_configfile=DEFAULT_CONFIG_PATH,
+                 print_log=False):
         self.r = reddit
         self.token = None
         self.refresh_token = None
         self.valid_until = time.time()
-        self.scopes = []
-        self.refreshable = True
+        self.scopes = set(scopes)
+        self.refreshable = refreshable
         self.server = None
+
+        self.app_key = app_key
+        self.app_secret = app_secret
 
         self._print = print_log
 
-        self.OAUTHAPPINFO_CONFIGFILE = oauthappinfo_configfile
-        self.OAUTHCONFIG_CONFIGFILE = oauthconfig_configfile
         self.OAUTHTOKEN_CONFIGFILE = oauthtoken_configfile
 
-        self._read_app_info()
-        self._read_config()
-        self._read_access_credentials()
+        self._set_app_info()
+        self._set_access_credentials()
 
     # ### LOAD SETTINGS ### #
 
-    def _read_app_info(self):
-        try:
-            with open(self.OAUTHAPPINFO_CONFIGFILE, "r") as f:
-                lines = [x.strip() for x in f.readlines()]
-            self.r.set_oauth_app_info(lines[0], lines[1],
-                                      "http://{0}:{1}/{2}".format(REDIRECT_URL,
-                                                                  REDIRECT_PORT,
-                                                                  REDIRECT_PATH))
-        except OSError:
-            print(self.OAUTHAPPINFO_CONFIGFILE, "not found.")
+    def _set_app_info(self):
+        redirect_url = "http://{0}:{1}/{2}".format(REDIRECT_URL, REDIRECT_PORT,
+                                                   REDIRECT_PATH)
+        self.r.set_oauth_app_info(self.app_key, self.app_secret, redirect_url)
 
-    def _read_config(self):
+    def _set_access_credentials(self):
         try:
-            with open(self.OAUTHCONFIG_CONFIGFILE, "r") as f:
-                lines = [x.strip() for x in f.readlines()]
-            self.scopes = lines[0].split(",")
-            self.refreshable = lines[1] == "True"
-        except OSError:
-            print(self.OAUTHCONFIG_CONFIGFILE, "not found.")
-
-    def _read_access_credentials(self):
-        try:
-            with open(self.OAUTHTOKEN_CONFIGFILE, "r") as f:
-                lines = [x.strip() for x in f.readlines()]
-            self.token = lines[0]
-            self.refresh_token = lines[1]
-            self.r.set_access_credentials(
-                set(self.scopes), self.token, self.refresh_token)
-        except (OSError,  praw.errors.OAuthInvalidToken):
+            self.r.set_access_credentials(self.scopes, self.token,
+                                          self.refresh_token)
+        except praw.errors.OAuthInvalidToken:
             if self._print:
                 print("Request new Token")
             self._get_new_access_information()
@@ -170,8 +153,8 @@ class OAuth2Util:
         """
         Set the token on the Reddit Object again
         """
-        self.r.set_access_credentials(
-            set(self.scopes), self.token, self.refresh_token)
+        self.r.set_access_credentials(set(self.scopes), self.token,
+                                      self.refresh_token)
 
     # ### REFRESH TOKEN ### #
 
