@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-
+import praw
 import os
 import re
 import time
@@ -7,8 +7,6 @@ import webbrowser
 from threading import Thread
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
-
-import praw
 
 
 # ### CONFIGURATION ### #

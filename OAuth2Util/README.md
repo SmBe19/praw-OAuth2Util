@@ -6,11 +6,8 @@ In your code you can use it like this:
 	import praw
 	import OAuth2Util
 
-	app_key = 'YOUR REDDIT APP KEY'
-	app_secret = 'YOUR REDDIT APP SECRET'
-
 	r = praw.Reddit("Useragent")
-	o = OAuth2Util.OAuth2Util(r, app_key=app_key, app_secret=app_secret)
+	o = OAuth2Util.OAuth2Util(r)
 
 That's it! To refresh the token (it is only valid for one hour), use `o.refresh()`. This checks first whether the token is still valid and doesn't request a new one if it is still valid. So you can call this method befor every block of PRAW usage. Example:
 
@@ -26,22 +23,17 @@ If you want to have different tokens (e.g if your script has to log in with diff
 In order to use OAuth2, you have to create an App on Reddit (https://www.reddit.com/prefs/apps/). For most use cases you will choose `script` as app type. You have to set the `redirect uri` to `http://127.0.0.1:65010/authorize_callback`, the other fields are up to you.
 
 ## Config
-OAuth2Util uses three config files to store the information. You can specify the name of them when you create the Util. Before you can use it, you have to fill out the first two, the third one will be filled out.
+OAuth2Util uses one config file to store the information. Before you can use it, the first two must be filled out manually by you, the third one will automatically be filled out when you authorize the script. Your `oauth.txt` should contain these lines:
+	
+	# Config 
+	scope=identity,account,edit,flair,history,livemanage,modconfig,modflair,modlog,modothers,modposts,modself,modwiki,mysubreddits,privatemessages,read,report,save,submit,subscribe,vote,wikiedit,wikiread # These grant the bot to every scope, only use those you want it to access.
+	refreshable=True
 
-### OAuthAppInfo
-Contains the client id and client secret of the app.
+	# Appinfo
+	app_key=thisistheid
+	app_secret=ThisIsTheSecretDoNotShare
 
-	thisistheid
-	ThisIsTheSecretDoNotShare
+	# Token
+	token=None
+	refresh_token=None
 
-### OAuthConfig
-Contains the requested scopes (separated by one `,`) and whether a refreshable token should be used.
-
-	identity,read
-	True
-
-### OAuthToken
-Contains the token and the refresh token. This config file is maintained by OAuth2Util, you don't have to do anything with it. If it shouldn't work anymore, just delete this file to request new tokens.
-
-	VerySecretToken
-	VerySecretRefreshToken
