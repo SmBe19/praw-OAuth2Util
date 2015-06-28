@@ -12,6 +12,7 @@ setup(
     version=version,
     install_requires=requirements,
     author='Benjamin Schmid',
+    author_email='bsgame27@gmail.com',
     packages=find_packages(),
     include_package_data=True,
     url='https://github.com/SmBe19/praw-OAuth2Util/',
