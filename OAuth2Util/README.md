@@ -5,9 +5,12 @@ In your code you can use it like this:
 
 	import praw
 	import OAuth2Util
-	
+
+	app_key = 'YOUR REDDIT APP KEY'
+	app_secret = 'YOUR REDDIT APP SECRET'
+
 	r = praw.Reddit("Useragent")
-	o = OAuth2Util.OAuth2Util(r)
+	o = OAuth2Util.OAuth2Util(r, app_key=app_key, app_secret=app_secret)
 
 That's it! To refresh the token (it is only valid for one hour), use `o.refresh()`. This checks first whether the token is still valid and doesn't request a new one if it is still valid. So you can call this method befor every block of PRAW usage. Example:
 
