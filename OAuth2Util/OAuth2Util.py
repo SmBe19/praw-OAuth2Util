@@ -86,7 +86,8 @@ class OAuth2Util:
 		self._print = print_log
 
 		self._set_app_info()
-		self._set_access_credentials()
+		self.refresh()
+		self.set_access_credentials()
 
 	# ### LOAD SETTINGS ### #
 
@@ -94,15 +95,6 @@ class OAuth2Util:
 		redirect_url = "http://{0}:{1}/{2}".format(REDIRECT_URL, REDIRECT_PORT,
 												   REDIRECT_PATH)
 		self.r.set_oauth_app_info(self.config[CONFIGKEY_APP_KEY], self.config[CONFIGKEY_APP_SECRET], redirect_url)
-
-	def _set_access_credentials(self):
-		try:
-			self.r.set_access_credentials(self.config[CONFIGKEY_SCOPE], self.config[CONFIGKEY_TOKEN],
-										  self.config[CONFIGKEY_REFRESH_TOKEN])
-		except praw.errors.OAuthInvalidToken:
-			if self._print:
-				print("Request new Token")
-			self._get_new_access_information()
 			
 	def _read_config(self, config, configfile):
 		try:
@@ -213,7 +205,13 @@ class OAuth2Util:
 		"""
 		Set the token on the Reddit Object again
 		"""
-		self._set_access_credentials()
+		try:
+			self.r.set_access_credentials(self.config[CONFIGKEY_SCOPE], self.config[CONFIGKEY_TOKEN],
+										  self.config[CONFIGKEY_REFRESH_TOKEN])
+		except praw.errors.OAuthInvalidToken:
+			if self._print:
+				print("Request new Token")
+			self._get_new_access_information()
 
 	# ### REFRESH TOKEN ### #
 
@@ -228,8 +226,13 @@ class OAuth2Util:
 		if time.time() > self.valid_until - REFRESH_MARGIN:
 			if self._print:
 				print("Refresh Token")
-			new_token = self.r.refresh_access_information(self.config[CONFIGKEY_REFRESH_TOKEN])
-			self.config[CONFIGKEY_TOKEN] = new_token["access_token"]
-			self.valid_until = time.time() + 3600
-			self._save_token()
-			self._set_access_credentials()
+			try:
+				new_token = self.r.refresh_access_information(self.config[CONFIGKEY_REFRESH_TOKEN])
+				self.config[CONFIGKEY_TOKEN] = new_token["access_token"]
+				self.valid_until = time.time() + 3600
+				self._save_token()
+				self.set_access_credentials()
+			except praw.errors.OAuthInvalidToken:
+				if self._print:
+					print("Request new Token")
+				self._get_new_access_information()
