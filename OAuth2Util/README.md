@@ -17,7 +17,7 @@ That's it! To refresh the token (it is only valid for one hour), use `o.refresh(
 		print(r.get_me().comment_karma)
 		time.sleep(3600)
 
-If you want to have different tokens (e.g if your script has to log in with different users), you have to specify at least a different oauthtoken config file.
+If you want to have different tokens (e.g if your script has to log in with different users), you have to specify a different config file (`o = OAuth2Util.OAuth2Util(r, configfile="otherconfigfile.txt")`).
 
 ## Reddit Config
 In order to use OAuth2, you have to create an App on Reddit (https://www.reddit.com/prefs/apps/). For most use cases you will choose `script` as app type. You have to set the `redirect uri` to `http://127.0.0.1:65010/authorize_callback`, the other fields are up to you.
