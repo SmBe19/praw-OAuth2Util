@@ -2,11 +2,15 @@
 
 from setuptools import setup, find_packages
 
+with open('requirements.txt') as f:
+    requirements = f.read().splitlines()
+
 version = '0.1'
 
 setup(
     name='praw-oauth2util',
     version=version,
+    install_requires=requirements,
     author='Benjamin Schmid',
     packages=find_packages(),
     include_package_data=True,
