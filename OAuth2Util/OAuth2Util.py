@@ -232,4 +232,4 @@ class OAuth2Util:
 			self.config[CONFIGKEY_TOKEN] = new_token["access_token"]
 			self.valid_until = time.time() + 3600
 			self._save_token()
-			# self.set_access_credentials(self.scopes, self.refreshable)
+			self._set_access_credentials()
