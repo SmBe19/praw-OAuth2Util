@@ -16,7 +16,7 @@ REFRESH_MARGIN = 60
 REDIRECT_URL = "127.0.0.1"
 REDIRECT_PORT = 65010
 REDIRECT_PATH = "authorize_callback"
-DEFAULT_CONFIG = os.path.expanduser("~/.praw-oauth-config.txt")
+DEFAULT_CONFIG = os.path.join(os.path.dirname(os.path.abspath(__file__)), "oauth.txt")
 
 CONFIGKEY_APP_KEY = "app_key"
 CONFIGKEY_APP_SECRET = "app_secret"
