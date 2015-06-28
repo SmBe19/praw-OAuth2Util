@@ -4,7 +4,7 @@ import praw
 import OAuth2Util
 
 r = praw.Reddit("OAuth2Util Demo by /u/SmBe19")
-o = OAuth2Util.OAuth2Util(r, print_log=True)
+o = OAuth2Util.OAuth2Util(r, print_log=True, configfile="oauth.txt")
 
 o.refresh()
 
