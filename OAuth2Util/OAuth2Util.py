@@ -1,6 +1,7 @@
 import praw
 import webbrowser
 import time
+import re
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
 from threading import Thread
@@ -41,61 +42,67 @@ class OAuth2UtilRequestHandler(BaseHTTPRequestHandler):
 
 class OAuth2Util:
 
-	def __init__(self, reddit, oauthappinfo_configfile = "oauthappinfo.txt", oauthconfig_configfile = "oauthconfig.txt", oauthtoken_configfile = "oauthtoken.txt", print_log=False):
+	def __init__(self, reddit, config_file="oauth2.conf", print_log=False):
 		self.r = reddit
 		self.token = None
 		self.refresh_token = None
 		self.valid_until = time.time()
-		self.scopes = []
-		self.refreshable = True
 		self.server = None
 		
 		self._print = print_log
 		
-		self.OAUTHAPPINFO_CONFIGFILE = oauthappinfo_configfile
-		self.OAUTHCONFIG_CONFIGFILE = oauthconfig_configfile
-		self.OAUTHTOKEN_CONFIGFILE = oauthtoken_configfile
+		self.OAUTHCONFIG = config_file
+		self.config = self.read_config()
 		
-		self._read_app_info()
-		self._read_config()
-		self._read_access_credentials()
+		self._set_app_info()
+		self.set_access_credentials()
 	
 	# ### LOAD SETTINGS ### #
 	
-	def _read_app_info(self):
+	def _set_app_info(self):
+		self.r.set_oauth_app_info(self.config["client_id"], self.config["secret_id"], "http://{0}:{1}/{2}".format(REDIRECT_URL, REDIRECT_PORT, REDIRECT_PATH))
+	
+	# ### CONFIG ### #
+	
+	def read_config(self):
 		try:
-			with open(self.OAUTHAPPINFO_CONFIGFILE, "r") as f:
+			with open(self.OAUTHCONFIG) as f:
 				lines = [x.strip() for x in f.readlines()]
-			self.r.set_oauth_app_info(lines[0], lines[1], "http://{0}:{1}/{2}".format(REDIRECT_URL, REDIRECT_PORT, REDIRECT_PATH))
+			pat = re.compile(r"^(\w+)[\t ]*=[\t ]*(.+)$")
+			d = {}
+			for l in lines:
+				m = pat.match(l)
+				try:
+					key = m.group(1)
+					val = m.group(2)
+				except AttributeError:
+					continue
+				if val=="True":val=True
+				if val=="False":val=False
+				if val=="None":val=None
+				if key=="scope":val=val.split(",")
+				d[key] = val
+			return d
 		except OSError:
-			print(self.OAUTHAPPINFO_CONFIGFILE, "not found.")
-			
-	def _read_config(self):
+			print(self.OAUTHCONFIG, "not found.")
+	
+	def _change_value(self, key, value):
 		try:
-			with open(self.OAUTHCONFIG_CONFIGFILE, "r") as f:
+			with open(self.OAUTHCONFIG) as f:
 				lines = [x.strip() for x in f.readlines()]
-			self.scopes = lines[0].split(",")
-			self.refreshable = lines[1] == "True"
+			for i in range(len(lines)):
+				if lines[i].startswith(key):
+					lines[i] = "%s=%s" % (key, str(value))
+			with open(self.OAUTHCONFIG) as f:
+				f.write("\n".join(lines))
 		except OSError:
-			print(self.OAUTHCONFIG_CONFIGFILE, "not found.")
-			
-	def _read_access_credentials(self):
-		try:
-			with open(self.OAUTHTOKEN_CONFIGFILE, "r") as f:
-				lines = [x.strip() for x in f.readlines()]
-			self.token = lines[0]
-			self.refresh_token = lines[1]
-			self.r.set_access_credentials(set(self.scopes), self.token, self.refresh_token)
-		except (OSError,  praw.errors.OAuthInvalidToken):
-			if self._print:
-				print("Request new Token")
-			self._get_new_access_information()
+			print(self.OAUTHCONFIG, "not found.")
 			
 	# ### SAVE SETTINGS ### #
 	
 	def _save_token(self):
-		with open(self.OAUTHTOKEN_CONFIGFILE, "w") as f:
-			f.write("{0}\n{1}\n".format(self.token, self.refresh_token))
+		self._change_value("token", self.config["token"])
+		self._change_value("refresh_token", self.config["refresh_token"])
 			
 	# ### REQUEST FIRST TOKEN ### #
 
@@ -116,7 +123,7 @@ class OAuth2Util:
 
 	def _get_new_access_information(self):
 		try:
-			url = self.r.get_authorize_url("SomeRandomState", self.scopes, self.refreshable)
+			url = self.r.get_authorize_url("SomeRandomState", self.config["scope"], self.config["refreshable"])
 		except praw.errors.OAuthAppRequired:
 			print("Cannot obtain authorize url from praw. Please check your configuration files.")
 			raise
@@ -133,8 +140,8 @@ class OAuth2Util:
 			print("--------------------------------")
 			raise
 		
-		self.token = access_information["access_token"]
-		self.refresh_token = access_information["refresh_token"]
+		self.config["token"] = access_information["access_token"]
+		self.config["refresh_token"] = access_information["refresh_token"]
 		self.valid_until = time.time() + 3600
 		self._save_token()
 		
@@ -143,13 +150,18 @@ class OAuth2Util:
 	def toggle_print(self):
 		self._print = not self._print
 		if self._print:
-			print('OAuth2Util printing on')
+			print("OAuth2Util printing on")
 	
 	def set_access_credentials(self):
 		"""
 		Set the token on the Reddit Object again
 		"""
-		self.r.set_access_credentials(set(self.scopes), self.token, self.refresh_token)
+		try:
+			self.r.set_access_credentials(set(self.config["scope"]), self.config["token"], self.config["refresh_token"])
+		except praw.errors.OAuthInvalidToken:
+			if self._print:
+				print("Request new Token")
+			self._get_new_access_information()
 		
 	# ### REFRESH TOKEN ### #
 	
@@ -163,8 +175,8 @@ class OAuth2Util:
 		if time.time() > self.valid_until - REFRESH_MARGIN:
 			if self._print:
 				print("Refresh Token")
-			new_token = self.r.refresh_access_information(self.refresh_token)
-			self.token = new_token["access_token"]
+			new_token = self.r.refresh_access_information(self.config["refresh_token"])
+			self.config["token"] = new_token["access_token"]
 			self.valid_until = time.time() + 3600
 			self._save_token()
 			#self.set_access_credentials(self.scopes, self.refreshable)
