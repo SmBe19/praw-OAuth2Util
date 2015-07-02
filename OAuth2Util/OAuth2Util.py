@@ -4,6 +4,7 @@ import os
 import re
 import time
 import webbrowser
+import __main__ as main
 from threading import Thread
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
@@ -14,7 +15,7 @@ REFRESH_MARGIN = 60
 REDIRECT_URL = "127.0.0.1"
 REDIRECT_PORT = 65010
 REDIRECT_PATH = "authorize_callback"
-DEFAULT_CONFIG = os.path.join(os.path.dirname(os.path.abspath(__file__)), "oauth.txt")
+DEFAULT_CONFIG = os.path.join(os.path.dirname(os.path.abspath(main.__file__)), "oauth.txt")
 
 CONFIGKEY_APP_KEY = "app_key"
 CONFIGKEY_APP_SECRET = "app_secret"
