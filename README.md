@@ -3,6 +3,8 @@ OAuth2 Utility for PRAW by [/u/SmBe19](http://www.reddit.com/u/SmBe19)
 
 See [OAuth2Util/README.md](OAuth2Util/README.md) for more information
 
+OAuth2Util is available on PyPi: `pip install praw-oauth2util`
+
 ## Bots Using OAuth2Util
 
  - [Various bots](https://github.com/SmBe19/RedditBots) by me.
