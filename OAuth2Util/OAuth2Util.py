@@ -28,6 +28,9 @@ CONFIGKEY_REFRESH_TOKEN = "refresh_token"
 class OAuth2UtilRequestHandler(BaseHTTPRequestHandler):
 
 	def do_GET(self):
+		"""
+		Handle the retrieval of the code
+		"""
 		parsed_url = urlparse(self.path)
 
 		if parsed_url[2] != "/" + REDIRECT_PATH:  # 2 = Path
@@ -61,6 +64,9 @@ class OAuth2Util:
 	def __init__(self, reddit, app_key=None, app_secret=None, scope=None,
 				 refreshable=None, configfile=DEFAULT_CONFIG,
 				 print_log=False):
+		"""
+		Create a new instance. The app info can also be read from a config file.
+		"""
 		self.r = reddit
 		self.valid_until = time.time()
 		self.server = None
@@ -92,11 +98,17 @@ class OAuth2Util:
 	# ### LOAD SETTINGS ### #
 
 	def _set_app_info(self):
+		"""
+		Set the app info (id & secret) read from the config file on the Reddit object
+		"""
 		redirect_url = "http://{0}:{1}/{2}".format(REDIRECT_URL, REDIRECT_PORT,
 												   REDIRECT_PATH)
 		self.r.set_oauth_app_info(self.config[CONFIGKEY_APP_KEY], self.config[CONFIGKEY_APP_SECRET], redirect_url)
 			
 	def _read_config(self, config, configfile):
+		"""
+		Read a config file into the given dictionary
+		"""
 		try:
 			with open(configfile) as f:
 				lines = [x.strip() for x in f.readlines()]
@@ -119,6 +131,9 @@ class OAuth2Util:
 				print("_read_config:", configfile, "not found.")
 	
 	def _change_value(self, file, key, value):
+		"""
+		Change the value of the given key in the given file to the given value
+		"""
 		try:
 			with open(file) as f:
 				lines = [x.strip() for x in f.readlines()]
@@ -144,12 +159,18 @@ class OAuth2Util:
 	# ### SAVE SETTINGS ### #
 
 	def _save_token(self):
+		"""
+		Save the tokens to the config file
+		"""
 		self._change_value(self.configfile, CONFIGKEY_TOKEN, self.config[CONFIGKEY_TOKEN])
 		self._change_value(self.configfile, CONFIGKEY_REFRESH_TOKEN, self.config[CONFIGKEY_REFRESH_TOKEN])
 
 	# ### REQUEST FIRST TOKEN ### #
 
 	def _start_webserver(self):
+		"""
+		Start the webserver that will receive the code
+		"""
 		server_address = (REDIRECT_URL, REDIRECT_PORT)
 		self.server = HTTPServer(server_address, OAuth2UtilRequestHandler)
 		self.server.oauth2util = self
@@ -159,12 +180,18 @@ class OAuth2Util:
 		t.start()
 
 	def _wait_for_response(self):
+		"""
+		Wait until the user accepted or rejected the request
+		"""
 		while not self.response_code:
 			time.sleep(2)
 		time.sleep(5)
 		self.server.shutdown()
 
 	def _get_new_access_information(self):
+		"""
+		Request new access information from reddit using the built in webserver
+		"""
 		try:
 			url = self.r.get_authorize_url(
 				"SomeRandomState", self.config[CONFIGKEY_SCOPE], self.config[CONFIGKEY_REFRESHABLE])
@@ -195,6 +222,9 @@ class OAuth2Util:
 		self._save_token()
 	
 	def _check_token_present(self):
+		"""
+		Check whether the tokens are set and request new ones if not
+		"""
 		if not self.config[CONFIGKEY_TOKEN] \
 			or (not self.config[CONFIGKEY_REFRESH_TOKEN] \
 			and self.config[CONFIGKEY_REFRESHABLE]):
