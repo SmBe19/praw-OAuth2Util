@@ -193,10 +193,21 @@ class OAuth2Util:
 		self.config[CONFIGKEY_REFRESH_TOKEN] = access_information["refresh_token"]
 		self.valid_until = time.time() + 3600
 		self._save_token()
+	
+	def _check_token_present(self):
+		if not self.config[CONFIGKEY_TOKEN] \
+			or (not self.config[CONFIGKEY_REFRESH_TOKEN] \
+			and self.config[CONFIGKEY_REFRESHABLE]):
+			if self._print:
+				print("Request new Token")
+			self._get_new_access_information()
 
 	# ### PUBLIC API ### #
 
 	def toggle_print(self):
+		"""
+		Enable / Disable log output
+		"""
 		self._print = not self._print
 		if self._print:
 			print('OAuth2Util printing on')
@@ -205,10 +216,12 @@ class OAuth2Util:
 		"""
 		Set the token on the Reddit Object again
 		"""
+		self._check_token_present()
+		
 		try:
 			self.r.set_access_credentials(self.config[CONFIGKEY_SCOPE], self.config[CONFIGKEY_TOKEN],
 										  self.config[CONFIGKEY_REFRESH_TOKEN])
-		except praw.errors.OAuthInvalidToken:
+		except (praw.errors.OAuthInvalidToken, praw.errors.HTTPException):
 			if self._print:
 				print("Request new Token")
 			self._get_new_access_information()
@@ -223,6 +236,8 @@ class OAuth2Util:
 		Call this method before a call to praw
 		if there might have passed more than one hour
 		"""
+		self._check_token_present()
+		
 		if time.time() > self.valid_until - REFRESH_MARGIN:
 			if self._print:
 				print("Refresh Token")
@@ -232,7 +247,7 @@ class OAuth2Util:
 				self.valid_until = time.time() + 3600
 				self._save_token()
 				self.set_access_credentials()
-			except praw.errors.OAuthInvalidToken:
+			except (praw.errors.OAuthInvalidToken, praw.errors.HTTPException):
 				if self._print:
 					print("Request new Token")
 				self._get_new_access_information()
