@@ -76,6 +76,9 @@ class OAuth2Util:
 		
 		self.config = {}
 		
+		self.config[CONFIGKEY_TOKEN] = None
+		self.config[CONFIGKEY_REFRESH_TOKEN] = None
+		
 		self._read_config(self.config, configfile)
 		
 		if app_key:
