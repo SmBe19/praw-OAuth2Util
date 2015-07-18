@@ -23,6 +23,7 @@ CONFIGKEY_SCOPE = "scope"
 CONFIGKEY_REFRESHABLE = "refreshable"
 CONFIGKEY_TOKEN = "token"
 CONFIGKEY_REFRESH_TOKEN = "refresh_token"
+CONFIGKEY_VALID_UNTIL = "valid_until"
 # ### END CONFIGURATION ### #
 
 
@@ -69,27 +70,27 @@ class OAuth2Util:
 		Create a new instance. The app info can also be read from a config file.
 		"""
 		self.r = reddit
-		self.valid_until = time.time()
 		self.server = None
-		
+
 		self.configfile = configfile
-		
+
 		self.config = {}
-		
+
+		self.config[CONFIGKEY_VALID_UNTIL] = time.time()
 		self.config[CONFIGKEY_TOKEN] = None
 		self.config[CONFIGKEY_REFRESH_TOKEN] = None
-		
+
 		self._read_config(self.config, configfile)
-		
+
 		if app_key:
 			self.config[CONFIGKEY_APP_KEY] = app_key
-		
+
 		if app_secret:
 			self.config[CONFIGKEY_APP_SECRET] = app_secret
-		
+
 		if scope:
 			self.config[CONFIGKEY_SCOPE] = set(scope)
-		
+
 		if refreshable:
 			self.config[CONFIGKEY_REFRESHABLE] = refreshable
 
@@ -108,7 +109,7 @@ class OAuth2Util:
 		redirect_url = "http://{0}:{1}/{2}".format(REDIRECT_URL, REDIRECT_PORT,
 												   REDIRECT_PATH)
 		self.r.set_oauth_app_info(self.config[CONFIGKEY_APP_KEY], self.config[CONFIGKEY_APP_SECRET], redirect_url)
-			
+
 	def _read_config(self, config, configfile):
 		"""
 		Read a config file into the given dictionary
@@ -117,7 +118,10 @@ class OAuth2Util:
 			with open(configfile) as f:
 				lines = [x.strip() for x in f.readlines()]
 			pat = re.compile(r"^(\w+)[\t ]*=[\t ]*(.+)$")
+			comment = re.compile(r"^\s*#.*$")
 			for l in lines:
+				if comment.match(l):
+					continue
 				m = pat.match(l)
 				try:
 					key = m.group(1)
@@ -128,12 +132,13 @@ class OAuth2Util:
 				if val=="False":val=False
 				if val=="None":val=None
 				if key==CONFIGKEY_SCOPE:val=set(val.split(","))
+				if key==CONFIGKEY_VALID_UNTIL:val=float(val)
 				config[key] = val
 			return config
 		except OSError:
 			if self._print:
 				print("_read_config:", configfile, "not found.")
-	
+
 	def _change_value(self, file, key, value):
 		"""
 		Change the value of the given key in the given file to the given value
@@ -168,6 +173,7 @@ class OAuth2Util:
 		"""
 		self._change_value(self.configfile, CONFIGKEY_TOKEN, self.config[CONFIGKEY_TOKEN])
 		self._change_value(self.configfile, CONFIGKEY_REFRESH_TOKEN, self.config[CONFIGKEY_REFRESH_TOKEN])
+		self._change_value(self.configfile, CONFIGKEY_VALID_UNTIL, self.config[CONFIGKEY_VALID_UNTIL])
 
 	# ### REQUEST FIRST TOKEN ### #
 
@@ -222,9 +228,9 @@ class OAuth2Util:
 
 		self.config[CONFIGKEY_TOKEN] = access_information["access_token"]
 		self.config[CONFIGKEY_REFRESH_TOKEN] = access_information["refresh_token"]
-		self.valid_until = time.time() + 3600
+		self.config[CONFIGKEY_VALID_UNTIL] = time.time() + 3600
 		self._save_token()
-	
+
 	def _check_token_present(self):
 		"""
 		Check whether the tokens are set and request new ones if not
@@ -251,7 +257,7 @@ class OAuth2Util:
 		Set the token on the Reddit Object again
 		"""
 		self._check_token_present()
-		
+
 		try:
 			self.r.set_access_credentials(self.config[CONFIGKEY_SCOPE], self.config[CONFIGKEY_TOKEN],
 										  self.config[CONFIGKEY_REFRESH_TOKEN])
@@ -262,7 +268,7 @@ class OAuth2Util:
 
 	# ### REFRESH TOKEN ### #
 
-	def refresh(self):
+	def refresh(self, force=False):
 		"""
 		Check if the token is still valid and requests a new if it is not
 		valid anymore
@@ -271,14 +277,21 @@ class OAuth2Util:
 		if there might have passed more than one hour
 		"""
 		self._check_token_present()
-		
-		if time.time() > self.valid_until - REFRESH_MARGIN:
+
+		if time.time() > self.config[CONFIGKEY_VALID_UNTIL] - REFRESH_MARGIN:
+			self._read_config(self.config, self.configfile)
+			if time.time() < self.config[CONFIGKEY_VALID_UNTIL] - REFRESH_MARGIN:
+				if self._print:
+					print("Found new token")
+				self.set_access_credentials()
+
+		if force or time.time() > self.config[CONFIGKEY_VALID_UNTIL] - REFRESH_MARGIN:
 			if self._print:
 				print("Refresh Token")
 			try:
 				new_token = self.r.refresh_access_information(self.config[CONFIGKEY_REFRESH_TOKEN])
 				self.config[CONFIGKEY_TOKEN] = new_token["access_token"]
-				self.valid_until = time.time() + 3600
+				self.config[CONFIGKEY_VALID_UNTIL] = time.time() + 3600
 				self._save_token()
 				self.set_access_credentials()
 			except (praw.errors.OAuthInvalidToken, praw.errors.HTTPException):
