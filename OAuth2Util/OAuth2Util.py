@@ -12,6 +12,7 @@ from urllib.parse import urlparse, parse_qs
 
 # ### CONFIGURATION ### #
 REFRESH_MARGIN = 60
+TOKEN_VALID_DURATION = 3600
 REDIRECT_URL = "127.0.0.1"
 REDIRECT_PORT = 65010
 REDIRECT_PATH = "authorize_callback"
@@ -228,7 +229,7 @@ class OAuth2Util:
 
 		self.config[CONFIGKEY_TOKEN] = access_information["access_token"]
 		self.config[CONFIGKEY_REFRESH_TOKEN] = access_information["refresh_token"]
-		self.config[CONFIGKEY_VALID_UNTIL] = time.time() + 3600
+		self.config[CONFIGKEY_VALID_UNTIL] = time.time() + TOKEN_VALID_DURATION
 		self._save_token()
 
 	def _check_token_present(self):
@@ -275,9 +276,12 @@ class OAuth2Util:
 
 		Call this method before a call to praw
 		if there might have passed more than one hour
+
+		force: if true, a new token will be retrieved no matter what
 		"""
 		self._check_token_present()
 
+		# We check whether another instance already refreshed the token
 		if time.time() > self.config[CONFIGKEY_VALID_UNTIL] - REFRESH_MARGIN:
 			self._read_config(self.config, self.configfile)
 			if time.time() < self.config[CONFIGKEY_VALID_UNTIL] - REFRESH_MARGIN:
@@ -291,7 +295,7 @@ class OAuth2Util:
 			try:
 				new_token = self.r.refresh_access_information(self.config[CONFIGKEY_REFRESH_TOKEN])
 				self.config[CONFIGKEY_TOKEN] = new_token["access_token"]
-				self.config[CONFIGKEY_VALID_UNTIL] = time.time() + 3600
+				self.config[CONFIGKEY_VALID_UNTIL] = time.time() + TOKEN_VALID_DURATION
 				self._save_token()
 				self.set_access_credentials()
 			except (praw.errors.OAuthInvalidToken, praw.errors.HTTPException):
