@@ -6,8 +6,15 @@ import time
 import webbrowser
 import __main__ as main
 from threading import Thread
-from http.server import HTTPServer, BaseHTTPRequestHandler
-from urllib.parse import urlparse, parse_qs
+try:
+	# Python 3.x
+	from http.server import HTTPServer, BaseHTTPRequestHandler
+	from urllib.parse import urlparse, parse_qs
+except ImportError:
+	# Python 2.x
+	from SimpleHTTPServer import SimpleHTTPRequestHandler as BaseHTTPRequestHandler
+	from SocketServer import TCPServer as HTTPServer
+	from urlparse import urlparse, parsw_qs
 
 
 # ### CONFIGURATION ### #
@@ -16,7 +23,11 @@ TOKEN_VALID_DURATION = 3600
 REDIRECT_URL = "127.0.0.1"
 REDIRECT_PORT = 65010
 REDIRECT_PATH = "authorize_callback"
-DEFAULT_CONFIG = os.path.join(os.path.dirname(os.path.abspath(main.__file__)), "oauth.txt")
+try:
+	DEFAULT_CONFIG = os.path.join(os.path.dirname(os.path.abspath(main.__file__)), "oauth.txt")
+except AttributeError:
+	# running interactive
+	DEFAULT_CONFIG = os.path.join(os.path.dirname(os.path.abspath(".")), "oauth.txt")
 
 CONFIGKEY_APP_KEY = "app_key"
 CONFIGKEY_APP_SECRET = "app_secret"
