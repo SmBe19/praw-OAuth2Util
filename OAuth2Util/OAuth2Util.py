@@ -14,7 +14,7 @@ except ImportError:
 	# Python 2.x
 	from SimpleHTTPServer import SimpleHTTPRequestHandler as BaseHTTPRequestHandler
 	from SocketServer import TCPServer as HTTPServer
-	from urlparse import urlparse, parsw_qs
+	from urlparse import urlparse, parse_qs
 
 
 # ### CONFIGURATION ### #
