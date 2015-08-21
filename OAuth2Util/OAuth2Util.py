@@ -25,6 +25,7 @@ TOKEN_VALID_DURATION = 3600
 REDIRECT_URL = "127.0.0.1"
 REDIRECT_PORT = 65010
 REDIRECT_PATH = "authorize_callback"
+SERVER_MODE_PATH = "oauth"
 try:
 	DEFAULT_CONFIG = os.path.join(os.path.dirname(os.path.abspath(main.__file__)), "oauth.txt")
 except AttributeError:
@@ -33,6 +34,7 @@ except AttributeError:
 
 CONFIGKEY_APP_KEY = "app_key"
 CONFIGKEY_APP_SECRET = "app_secret"
+CONFIGKEY_SERVER_MODE = "server_mode"
 CONFIGKEY_SCOPE = "scope"
 CONFIGKEY_REFRESHABLE = "refreshable"
 CONFIGKEY_TOKEN = "token"
@@ -49,37 +51,45 @@ class OAuth2UtilRequestHandler(BaseHTTPRequestHandler):
 		"""
 		parsed_url = urlparse(self.path)
 
-		if parsed_url[2] != "/" + REDIRECT_PATH:  # 2 = Path
-			self.send_response(404)
-			self.end_headers()
-			return
+		if parsed_url[2] == "/" + REDIRECT_PATH:  # 2 = Path
+			parsed_query = parse_qs(parsed_url[4])  # 4 = Query
 
-		parsed_query = parse_qs(parsed_url[4])  # 4 = Query
+			if "code" not in parsed_query:
+				self.send_response(200)
+				self.send_header("Content-Type", "text/plain")
+				self.end_headers()
 
-		if "code" not in parsed_query:
+				self.wfile.write("No code found, try again!".encode("utf-8"))
+				return
+
+			self.server.oauth2util.response_code = parsed_query["code"][0]
+
 			self.send_response(200)
 			self.send_header("Content-Type", "text/plain")
 			self.end_headers()
 
-			self.wfile.write("No code found, try again!".encode("utf-8"))
-			return
+			self.wfile.write(
+				"Thank you for using OAuth2Util. The authorization was successful, "
+				"you can now close this window.".encode("utf-8"))
+		elif parsed_url[2] == "/" + SERVER_MODE_PATH: # 2 = Path
+			self.send_response(200)
+			self.send_header("Content-Type", "text/html")
+			self.end_headers()
 
-		self.server.oauth2util.response_code = parsed_query["code"][0]
-
-		self.send_response(200)
-		self.send_header("Content-Type", "text/plain")
-		self.end_headers()
-
-		self.wfile.write(
-			"Thank you for using OAuth2Util. The authorization was successful, "
-			"you can now close this window.".encode("utf-8"))
+			self.wfile.write("<html><body>Hey there!<br/>Click <a href=\"{0}\">here</a> to claim your prize.</body></html>"
+				.format(self.server.oauth2util.authorize_url).encode("utf-8"))
+		else:
+			self.send_response(404)
+			self.send_header("Content-Type", "text/plain")
+			self.end_headers()
+			self.wfile.write("404 not found".encode("utf-8"))
 
 
 class OAuth2Util:
 
 	def __init__(self, reddit, app_key=None, app_secret=None, scope=None,
-				 refreshable=None, configfile=DEFAULT_CONFIG,
-				 print_log=False):
+				 refreshable=None, configfile=DEFAULT_CONFIG, print_log=False,
+				 server_mode=None):
 		"""
 		Create a new instance. The app info can also be read from a config file.
 		"""
@@ -90,6 +100,7 @@ class OAuth2Util:
 
 		self.config = {}
 
+		self.config[CONFIGKEY_SERVER_MODE] = False
 		self.config[CONFIGKEY_VALID_UNTIL] = time.time()
 		self.config[CONFIGKEY_TOKEN] = None
 		self.config[CONFIGKEY_REFRESH_TOKEN] = None
@@ -105,8 +116,11 @@ class OAuth2Util:
 		if scope:
 			self.config[CONFIGKEY_SCOPE] = set(scope)
 
-		if refreshable:
+		if refreshable is not None:
 			self.config[CONFIGKEY_REFRESHABLE] = refreshable
+
+		if server_mode is not None:
+			self.config[CONFIGKEY_SERVER_MODE] = server_mode
 
 		self._print = print_log
 
@@ -122,7 +136,9 @@ class OAuth2Util:
 		"""
 		redirect_url = "http://{0}:{1}/{2}".format(REDIRECT_URL, REDIRECT_PORT,
 												   REDIRECT_PATH)
-		self.r.set_oauth_app_info(self.config[CONFIGKEY_APP_KEY], self.config[CONFIGKEY_APP_SECRET], redirect_url)
+		self.r.set_oauth_app_info(self.config[CONFIGKEY_APP_KEY],
+								  self.config[CONFIGKEY_APP_SECRET],
+								  redirect_url)
 
 	def _read_config(self, config, configfile):
 		"""
@@ -191,7 +207,7 @@ class OAuth2Util:
 
 	# ### REQUEST FIRST TOKEN ### #
 
-	def _start_webserver(self):
+	def _start_webserver(self, authorize_url=None):
 		"""
 		Start the webserver that will receive the code
 		"""
@@ -199,6 +215,7 @@ class OAuth2Util:
 		self.server = HTTPServer(server_address, OAuth2UtilRequestHandler)
 		self.server.oauth2util = self
 		self.response_code = None
+		self.authorize_url = authorize_url
 		t = Thread(target=self.server.serve_forever)
 		t.daemon = True
 		t.start()
@@ -218,15 +235,21 @@ class OAuth2Util:
 		"""
 		try:
 			url = self.r.get_authorize_url(
-				"SomeRandomState", self.config[CONFIGKEY_SCOPE], self.config[CONFIGKEY_REFRESHABLE])
+				"SomeRandomState", self.config[CONFIGKEY_SCOPE],
+				self.config[CONFIGKEY_REFRESHABLE])
 		except praw.errors.OAuthAppRequired:
 			print(
 				"Cannot obtain authorize url from praw. Please check your "
 				"configuration files.")
 			raise
 
-		self._start_webserver()
-		webbrowser.open(url)
+		self._start_webserver(url)
+		if not self.config[CONFIGKEY_SERVER_MODE]:
+			webbrowser.open(url)
+		else:
+			print("Webserver is waiting for you :D. Please open {0}:{1}/{2} "
+					"in your browser"
+				.format(REDIRECT_URL, REDIRECT_PORT, SERVER_MODE_PATH))
 		self._wait_for_response()
 
 		try:
@@ -234,9 +257,8 @@ class OAuth2Util:
 				self.response_code)
 		except praw.errors.OAuthException:
 			print("--------------------------------")
-			print(
-				"Can not authenticate, maybe the app infos (e.g. secret) "
-				"are wrong.")
+			print("Can not authenticate, maybe the app infos (e.g. secret) "
+					"are wrong.")
 			print("--------------------------------")
 			raise
 
@@ -253,7 +275,7 @@ class OAuth2Util:
 			or (not self.config[CONFIGKEY_REFRESH_TOKEN] \
 			and self.config[CONFIGKEY_REFRESHABLE]):
 			if self._print:
-				print("Request new Token")
+				print("Request new Token (CTP)")
 			self._get_new_access_information()
 
 	# ### PUBLIC API ### #
@@ -273,11 +295,12 @@ class OAuth2Util:
 		self._check_token_present()
 
 		try:
-			self.r.set_access_credentials(self.config[CONFIGKEY_SCOPE], self.config[CONFIGKEY_TOKEN],
+			self.r.set_access_credentials(self.config[CONFIGKEY_SCOPE],
+										  self.config[CONFIGKEY_TOKEN],
 										  self.config[CONFIGKEY_REFRESH_TOKEN])
 		except (praw.errors.OAuthInvalidToken, praw.errors.HTTPException):
 			if self._print:
-				print("Request new Token")
+				print("Request new Token (SAC)")
 			self._get_new_access_information()
 
 	# ### REFRESH TOKEN ### #
@@ -313,5 +336,5 @@ class OAuth2Util:
 				self.set_access_credentials()
 			except (praw.errors.OAuthInvalidToken, praw.errors.HTTPException):
 				if self._print:
-					print("Request new Token")
+					print("Request new Token (REF)")
 				self._get_new_access_information()

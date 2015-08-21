@@ -36,6 +36,9 @@ Both methods should work without a problem. If you use the first method (without
 ## Reddit Config
 In order to use OAuth2, you have to create an App on Reddit (https://www.reddit.com/prefs/apps/). For most use cases you will choose `script` as app type. You have to set the `redirect uri` to `http://127.0.0.1:65010/authorize_callback`, the other fields are up to you.
 
+# Server Mode
+Add a line `server_mode=True` to your config file or initialize with `o = OAuth2Util.OAuth2Util(r, server_mode=True)` to activate server mode. This mode is designed for use where the script doesn't run locally but runs on a remote server instead. In this scenario it's not really helpful to open a webbroser on the server, is it? If server mode is activated you can open a page in your local browser where you can click a link for the authorization. By default this page is `127.0.0.1:65010/oauth`.
+
 ## Config
 OAuth2Util uses one config file to store the information. Before you can use it, the first two sections must be filled out manually by you, the third one will automatically be filled out when you authorize the script. Your `oauth.txt` should contain these lines:
 
