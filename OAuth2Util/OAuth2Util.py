@@ -122,19 +122,19 @@ class OAuth2Util:
 			self._migrate_config(needMigration, configfile)
 			self.config.read(configfile)
 
-		if CONFIGKEY_SERVER_MODE[0] not in self.config:
-			self.config[CONFIGKEY_SERVER_MODE[0]] = {}
+		if not self.config.has_section(CONFIGKEY_SERVER_MODE[0]):
+			self.config.add_section(CONFIGKEY_SERVER_MODE[0])
 
 		if app_key is not None:
-			self.config[CONFIGKEY_APP_KEY[0]][CONFIGKEY_APP_KEY[1]] = str(app_key)
+			self.config.set(CONFIGKEY_APP_KEY[0], CONFIGKEY_APP_KEY[1], str(app_key))
 		if app_secret is not None:
-			self.config[CONFIGKEY_APP_SECRET[0]][CONFIGKEY_APP_SECRET[1]] = str(app_secret)
+			self.config.set(CONFIGKEY_APP_SECRET[0], CONFIGKEY_APP_SECRET[1], str(app_secret))
 		if scope is not None:
-			self.config[CONFIGKEY_SCOPE[0]][CONFIGKEY_SCOPE[1]] = str(scope)
+			self.config.set(CONFIGKEY_SCOPE[0], CONFIGKEY_SCOPE[1], str(scope))
 		if refreshable is not None:
-			self.config[CONFIGKEY_REFRESHABLE[0]][CONFIGKEY_REFRESHABLE[1]] = str(refreshable)
+			self.config.set(CONFIGKEY_REFRESHABLE[0], CONFIGKEY_REFRESHABLE[1], str(refreshable))
 		if server_mode is not None:
-			self.config[CONFIGKEY_SERVER_MODE[0]][CONFIGKEY_SERVER_MODE[1]] = str(server_mode)
+			self.config.set(CONFIGKEY_SERVER_MODE[0], CONFIGKEY_SERVER_MODE[1], str(server_mode))
 
 		global SERVER_URL, SERVER_PORT, SERVER_REDIRECT_PATH, SERVER_LINK_PATH
 		SERVER_URL = self._get_value(CONFIGKEY_SERVER_URL, exception_default=SERVER_URL)
@@ -167,26 +167,26 @@ class OAuth2Util:
 		"""
 		try:
 			if as_boolean:
-				return self.config[key[0]].getboolean(key[1])
-			value = self.config[key[0]][key[1]]
+				return self.config.getboolean(key[0], key[1])
+			value = self.config.get(key[0], key[1])
 			if split_val is not None:
 				value = value.split(split_val)
 			if func is not None:
 				return func(value)
 			return value
-		except KeyError:
+		except (KeyError, configparser.NoSectionError, configparser.NoOptionError) as e:
 			if exception_default is not None:
 				return exception_default
-			raise
+			raise KeyError(e)
 
 	def _change_value(self, key, value):
 		"""
 		Change the value of the given key in the given file to the given value
 		"""
-		if not key[0] in self.config:
-			self.config[key[0]] = {}
+		if not self.config.has_section(key[0]):
+			self.config.add_section(key[0])
 
-		self.config[key[0]][key[1]] = str(value)
+		self.config.set(key[0], key[1], str(value))
 
 		with open(self.configfile, "w") as f:
 			self.config.write(f)
