@@ -10,10 +10,12 @@ import __main__ as main
 from threading import Thread
 try:
 	# Python 3.x
+	import configparser
 	from http.server import HTTPServer, BaseHTTPRequestHandler
 	from urllib.parse import urlparse, parse_qs
 except ImportError:
 	# Python 2.x
+	import ConfigParser as configparser
 	from SimpleHTTPServer import SimpleHTTPRequestHandler as BaseHTTPRequestHandler
 	from SocketServer import TCPServer as HTTPServer
 	from urlparse import urlparse, parse_qs
@@ -22,24 +24,29 @@ except ImportError:
 # ### CONFIGURATION ### #
 REFRESH_MARGIN = 60
 TOKEN_VALID_DURATION = 3600
-REDIRECT_URL = "127.0.0.1"
-REDIRECT_PORT = 65010
-REDIRECT_PATH = "authorize_callback"
-SERVER_MODE_PATH = "oauth"
+SERVER_URL = "127.0.0.1"
+SERVER_PORT = 65010
+SERVER_REDIRECT_PATH = "authorize_callback"
+SERVER_LINK_PATH = "oauth"
 try:
-	DEFAULT_CONFIG = os.path.join(os.path.dirname(os.path.abspath(main.__file__)), "oauth.txt")
+	DEFAULT_CONFIG = os.path.join(os.path.dirname(os.path.abspath(main.__file__)), "oauth.ini")
 except AttributeError:
 	# running interactive
-	DEFAULT_CONFIG = os.path.join(os.path.dirname(os.path.abspath(".")), "oauth.txt")
+	DEFAULT_CONFIG = os.path.join(os.path.dirname(os.path.abspath(".")), "oauth.ini")
 
-CONFIGKEY_APP_KEY = "app_key"
-CONFIGKEY_APP_SECRET = "app_secret"
-CONFIGKEY_SERVER_MODE = "server_mode"
-CONFIGKEY_SCOPE = "scope"
-CONFIGKEY_REFRESHABLE = "refreshable"
-CONFIGKEY_TOKEN = "token"
-CONFIGKEY_REFRESH_TOKEN = "refresh_token"
-CONFIGKEY_VALID_UNTIL = "valid_until"
+CONFIGKEY_APP_KEY = ("app", "app_key")
+CONFIGKEY_APP_SECRET = ("app", "app_secret")
+CONFIGKEY_SCOPE = ("app", "scope")
+CONFIGKEY_REFRESHABLE = ("app", "refreshable")
+CONFIGKEY_TOKEN = ("token", "token")
+CONFIGKEY_REFRESH_TOKEN = ("token", "refresh_token")
+CONFIGKEY_VALID_UNTIL = ("token", "valid_until")
+
+CONFIGKEY_SERVER_MODE = ("server", "server_mode")
+CONFIGKEY_SERVER_URL = ("server", "url")
+CONFIGKEY_SERVER_PORT = ("server", "port")
+CONFIGKEY_SERVER_REDIRECT_PATH = ("server", "redirect_path")
+CONFIGKEY_SERVER_LINK_PATH = ("server", "link_path")
 # ### END CONFIGURATION ### #
 
 
@@ -51,7 +58,7 @@ class OAuth2UtilRequestHandler(BaseHTTPRequestHandler):
 		"""
 		parsed_url = urlparse(self.path)
 
-		if parsed_url[2] == "/" + REDIRECT_PATH:  # 2 = Path
+		if parsed_url[2] == "/" + SERVER_REDIRECT_PATH:  # 2 = Path
 			parsed_query = parse_qs(parsed_url[4])  # 4 = Query
 
 			if "code" not in parsed_query:
@@ -71,7 +78,7 @@ class OAuth2UtilRequestHandler(BaseHTTPRequestHandler):
 			self.wfile.write(
 				"Thank you for using OAuth2Util. The authorization was successful, "
 				"you can now close this window.".encode("utf-8"))
-		elif parsed_url[2] == "/" + SERVER_MODE_PATH: # 2 = Path
+		elif parsed_url[2] == "/" + SERVER_LINK_PATH: # 2 = Path
 			self.send_response(200)
 			self.send_header("Content-Type", "text/html")
 			self.end_headers()
@@ -93,34 +100,44 @@ class OAuth2Util:
 		"""
 		Create a new instance. The app info can also be read from a config file.
 		"""
+
 		self.r = reddit
 		self.server = None
 
 		self.configfile = configfile
 
-		self.config = {}
+		self.config = configparser.ConfigParser()
+		needMigration = None
+		try:
+			self.config.read(configfile)
+			if len(self.config.sections()) == 0:
+				needMigration = "oauth.txt"
+		except MissingSectionHeaderException:
+			needMigration = configfile
 
-		self.config[CONFIGKEY_SERVER_MODE] = False
-		self.config[CONFIGKEY_VALID_UNTIL] = time.time()
-		self.config[CONFIGKEY_TOKEN] = None
-		self.config[CONFIGKEY_REFRESH_TOKEN] = None
+		if needMigration is not None:
+			self._migrate_config(needMigration, configfile)
+			self.config.read(configfile)
 
-		self._read_config(self.config, configfile)
+		if CONFIGKEY_SERVER_MODE[0] not in self.config:
+			self.config[CONFIGKEY_SERVER_MODE[0]] = {}
 
-		if app_key:
-			self.config[CONFIGKEY_APP_KEY] = app_key
-
-		if app_secret:
-			self.config[CONFIGKEY_APP_SECRET] = app_secret
-
-		if scope:
-			self.config[CONFIGKEY_SCOPE] = set(scope)
-
+		if app_key is not None:
+			self.config[CONFIGKEY_APP_KEY[0]][CONFIGKEY_APP_KEY[1]] = str(app_key)
+		if app_secret is not None:
+			self.config[CONFIGKEY_APP_SECRET[0]][CONFIGKEY_APP_SECRET[1]] = str(app_secret)
+		if scope is not None:
+			self.config[CONFIGKEY_SCOPE[0]][CONFIGKEY_SCOPE[1]] = str(scope)
 		if refreshable is not None:
-			self.config[CONFIGKEY_REFRESHABLE] = refreshable
-
+			self.config[CONFIGKEY_REFRESHABLE[0]][CONFIGKEY_REFRESHABLE[1]] = str(refreshable)
 		if server_mode is not None:
-			self.config[CONFIGKEY_SERVER_MODE] = server_mode
+			self.config[CONFIGKEY_SERVER_MODE[0]][CONFIGKEY_SERVER_MODE[1]] = str(server_mode)
+
+		global SERVER_URL, SERVER_PORT, SERVER_REDIRECT_PATH, SERVER_LINK_PATH
+		SERVER_URL = self._get_value(CONFIGKEY_SERVER_URL, exception_default=SERVER_URL)
+		SERVER_PORT = self._get_value(CONFIGKEY_SERVER_PORT, int, exception_default=SERVER_PORT)
+		SERVER_REDIRECT_PATH = self._get_value(CONFIGKEY_SERVER_REDIRECT_PATH, exception_default=SERVER_REDIRECT_PATH)
+		SERVER_LINK_PATH = self._get_value(CONFIGKEY_SERVER_LINK_PATH, exception_default=SERVER_LINK_PATH)
 
 		self._print = print_log
 
@@ -134,76 +151,56 @@ class OAuth2Util:
 		"""
 		Set the app info (id & secret) read from the config file on the Reddit object
 		"""
-		redirect_url = "http://{0}:{1}/{2}".format(REDIRECT_URL, REDIRECT_PORT,
-												   REDIRECT_PATH)
-		self.r.set_oauth_app_info(self.config[CONFIGKEY_APP_KEY],
-								  self.config[CONFIGKEY_APP_SECRET],
+		redirect_url = "http://{0}:{1}/{2}".format(SERVER_URL, SERVER_PORT,
+												   SERVER_REDIRECT_PATH)
+		self.r.set_oauth_app_info(self._get_value(CONFIGKEY_APP_KEY),
+								  self._get_value(CONFIGKEY_APP_SECRET),
 								  redirect_url)
 
-	def _read_config(self, config, configfile):
+	def _get_value(self, key, func=None, split_val=None, as_boolean=False,
+		exception_default=None):
 		"""
-		Read a config file into the given dictionary
+		Helper method to get a value from the config
 		"""
 		try:
-			with open(configfile) as f:
-				lines = [x.strip() for x in f.readlines()]
-			pat = re.compile(r"^(\w+)[\t ]*=[\t ]*(.+)$")
-			comment = re.compile(r"^\s*#.*$")
-			for l in lines:
-				if comment.match(l):
-					continue
-				m = pat.match(l)
-				try:
-					key = m.group(1)
-					val = m.group(2)
-				except AttributeError:
-					continue
-				if val=="True":val=True
-				if val=="False":val=False
-				if val=="None":val=None
-				if key==CONFIGKEY_SCOPE:val=set(val.split(","))
-				if key==CONFIGKEY_VALID_UNTIL:val=float(val)
-				config[key] = val
-			return config
-		except OSError:
-			if self._print:
-				print("_read_config:", configfile, "not found.")
+			if as_boolean:
+				return self.config[key[0]].getboolean(key[1])
+			value = self.config[key[0]][key[1]]
+			if split_val is not None:
+				value = value.split(split_val)
+			if func is not None:
+				return func(value)
+			return value
+		except KeyError:
+			if exception_default is not None:
+				return exception_default
+			raise
 
-	def _change_value(self, file, key, value):
+	def _change_value(self, key, value):
 		"""
 		Change the value of the given key in the given file to the given value
 		"""
-		try:
-			with open(file) as f:
-				lines = [x.strip() for x in f.readlines()]
-		except OSError:
-			if self._print:
-				print("_change_value read:", file, "not found.")
-			lines = []
-		found = False
-		for i in range(len(lines)):
-			if lines[i].startswith(key):
-				lines[i] = "{0}={1}".format(key, str(value))
-				found = True
-				break
-		if not found:
-			lines.append("{0}={1}".format(key, str(value)))
-		try:
-			with open(file, "w") as f:
-				f.write("\n".join(lines))
-		except OSError:
-			if self._print:
-				print("_change_value write:", file, "not found.")
+		if not key[0] in self.config:
+			self.config[key[0]] = {}
+
+		self.config[key[0]][key[1]] = str(value)
+
+		with open(self.configfile, "w") as f:
+			self.config.write(f)
+
+	def _migrate_config(self, oldname=DEFAULT_CONFIG, newname=DEFAULT_CONFIG):
+		"""
+		Migrates the old config file format to the new one
+		"""
+		print("Your OAuth2Util config file is in an old format and needs "
+			"to be changed. I tried as best as I could to migrate it.")
+
+		with open(oldname, "r") as old:
+			with open(newname, "w") as new:
+				new.write("[app]\n")
+				new.write(old.read())
 
 	# ### SAVE SETTINGS ### #
-
-	def _save_token(self):
-		"""
-		Save the tokens to the config file
-		"""
-		self._change_value(self.configfile, CONFIGKEY_TOKEN, self.config[CONFIGKEY_TOKEN])
-		self._change_value(self.configfile, CONFIGKEY_REFRESH_TOKEN, self.config[CONFIGKEY_REFRESH_TOKEN])
-		self._change_value(self.configfile, CONFIGKEY_VALID_UNTIL, self.config[CONFIGKEY_VALID_UNTIL])
 
 	# ### REQUEST FIRST TOKEN ### #
 
@@ -211,7 +208,7 @@ class OAuth2Util:
 		"""
 		Start the webserver that will receive the code
 		"""
-		server_address = (REDIRECT_URL, REDIRECT_PORT)
+		server_address = (SERVER_URL, SERVER_PORT)
 		self.server = HTTPServer(server_address, OAuth2UtilRequestHandler)
 		self.server.oauth2util = self
 		self.response_code = None
@@ -235,8 +232,8 @@ class OAuth2Util:
 		"""
 		try:
 			url = self.r.get_authorize_url(
-				"SomeRandomState", self.config[CONFIGKEY_SCOPE],
-				self.config[CONFIGKEY_REFRESHABLE])
+				"SomeRandomState", self._get_value(CONFIGKEY_SCOPE, set, split_val=","),
+				self._get_value(CONFIGKEY_REFRESHABLE, as_boolean=True))
 		except praw.errors.OAuthAppRequired:
 			print(
 				"Cannot obtain authorize url from praw. Please check your "
@@ -244,12 +241,12 @@ class OAuth2Util:
 			raise
 
 		self._start_webserver(url)
-		if not self.config[CONFIGKEY_SERVER_MODE]:
+		if not self._get_value(CONFIGKEY_SERVER_MODE, as_boolean=True):
 			webbrowser.open(url)
 		else:
 			print("Webserver is waiting for you :D. Please open {0}:{1}/{2} "
 					"in your browser"
-				.format(REDIRECT_URL, REDIRECT_PORT, SERVER_MODE_PATH))
+				.format(SERVER_URL, SERVER_PORT, SERVER_LINK_PATH))
 		self._wait_for_response()
 
 		try:
@@ -262,18 +259,19 @@ class OAuth2Util:
 			print("--------------------------------")
 			raise
 
-		self.config[CONFIGKEY_TOKEN] = access_information["access_token"]
-		self.config[CONFIGKEY_REFRESH_TOKEN] = access_information["refresh_token"]
-		self.config[CONFIGKEY_VALID_UNTIL] = time.time() + TOKEN_VALID_DURATION
-		self._save_token()
+		self._change_value(CONFIGKEY_TOKEN, access_information["access_token"])
+		self._change_value(CONFIGKEY_REFRESH_TOKEN, access_information["refresh_token"])
+		self._change_value(CONFIGKEY_VALID_UNTIL, time.time() + TOKEN_VALID_DURATION)
 
 	def _check_token_present(self):
 		"""
 		Check whether the tokens are set and request new ones if not
 		"""
-		if not self.config[CONFIGKEY_TOKEN] \
-			or (not self.config[CONFIGKEY_REFRESH_TOKEN] \
-			and self.config[CONFIGKEY_REFRESHABLE]):
+		try:
+			self._get_value(CONFIGKEY_TOKEN)
+			self._get_value(CONFIGKEY_REFRESH_TOKEN)
+			self._get_value(CONFIGKEY_REFRESHABLE)
+		except KeyError:
 			if self._print:
 				print("Request new Token (CTP)")
 			self._get_new_access_information()
@@ -295,9 +293,9 @@ class OAuth2Util:
 		self._check_token_present()
 
 		try:
-			self.r.set_access_credentials(self.config[CONFIGKEY_SCOPE],
-										  self.config[CONFIGKEY_TOKEN],
-										  self.config[CONFIGKEY_REFRESH_TOKEN])
+			self.r.set_access_credentials(self._get_value(CONFIGKEY_SCOPE, set, split_val=","),
+										  self._get_value(CONFIGKEY_TOKEN),
+										  self._get_value(CONFIGKEY_REFRESH_TOKEN))
 		except (praw.errors.OAuthInvalidToken, praw.errors.HTTPException):
 			if self._print:
 				print("Request new Token (SAC)")
@@ -318,21 +316,20 @@ class OAuth2Util:
 		self._check_token_present()
 
 		# We check whether another instance already refreshed the token
-		if time.time() > self.config[CONFIGKEY_VALID_UNTIL] - REFRESH_MARGIN:
-			self._read_config(self.config, self.configfile)
-			if time.time() < self.config[CONFIGKEY_VALID_UNTIL] - REFRESH_MARGIN:
+		if time.time() > self._get_value(CONFIGKEY_VALID_UNTIL, float) - REFRESH_MARGIN:
+			self.config.read(self.configfile)
+			if time.time() < self._get_value(CONFIGKEY_VALID_UNTIL, float) - REFRESH_MARGIN:
 				if self._print:
 					print("Found new token")
 				self.set_access_credentials()
 
-		if force or time.time() > self.config[CONFIGKEY_VALID_UNTIL] - REFRESH_MARGIN:
+		if force or time.time() > self._get_value(CONFIGKEY_VALID_UNTIL, float) - REFRESH_MARGIN:
 			if self._print:
 				print("Refresh Token")
 			try:
-				new_token = self.r.refresh_access_information(self.config[CONFIGKEY_REFRESH_TOKEN])
-				self.config[CONFIGKEY_TOKEN] = new_token["access_token"]
-				self.config[CONFIGKEY_VALID_UNTIL] = time.time() + TOKEN_VALID_DURATION
-				self._save_token()
+				new_token = self.r.refresh_access_information(self._get_value(CONFIGKEY_REFRESH_TOKEN))
+				self._change_value(CONFIGKEY_TOKEN, new_token["access_token"])
+				self._change_value(CONFIGKEY_VALID_UNTIL, time.time() + TOKEN_VALID_DURATION)
 				self.set_access_credentials()
 			except (praw.errors.OAuthInvalidToken, praw.errors.HTTPException):
 				if self._print:
