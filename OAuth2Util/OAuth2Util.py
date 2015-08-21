@@ -111,8 +111,11 @@ class OAuth2Util:
 		try:
 			self.config.read(configfile)
 			if len(self.config.sections()) == 0:
-				needMigration = "oauth.txt"
-		except MissingSectionHeaderException:
+				if os.path.isfile("oauth.txt"):
+					needMigration = "oauth.txt"
+				else:
+					raise FileNotFoundError("File " + configfile + " not found")
+		except configparser.MissingSectionHeaderError:
 			needMigration = configfile
 
 		if needMigration is not None:
