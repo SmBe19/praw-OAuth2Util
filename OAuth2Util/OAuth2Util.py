@@ -125,6 +125,11 @@ class OAuth2Util:
 		if not self.config.has_section(CONFIGKEY_SERVER_MODE[0]):
 			self.config.add_section(CONFIGKEY_SERVER_MODE[0])
 
+		try:
+			self._get_value(CONFIGKEY_SERVER_MODE)
+		except KeyError:
+			self.config.set(CONFIGKEY_SERVER_MODE[0], CONFIGKEY_SERVER_MODE[1], str(False))
+
 		if app_key is not None:
 			self.config.set(CONFIGKEY_APP_KEY[0], CONFIGKEY_APP_KEY[1], str(app_key))
 		if app_secret is not None:
