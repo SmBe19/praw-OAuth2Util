@@ -275,13 +275,10 @@ class OAuth2Util:
 		"""
 		Check whether the tokens are set and request new ones if not
 		"""
-		try:
-			self._get_value(CONFIGKEY_TOKEN)
-			self._get_value(CONFIGKEY_REFRESH_TOKEN)
-			self._get_value(CONFIGKEY_REFRESHABLE)
-		except KeyError:
-			if self._print:
-				print("Request new Token (CTP)")
+		options = self.config.items(CONFIGKEY_TOKEN[0])
+		check_values = (CONFIGKEY_TOKEN[1], CONFIGKEY_REFRESH_TOKEN[1], CONFIGKEY_REFRESHABLE[1])
+		if not all(value in options for value in check_values):
+			if self._print: print('Request new token (CTP)')
 			self._get_new_access_information()
 
 	# ### PUBLIC API ### #
