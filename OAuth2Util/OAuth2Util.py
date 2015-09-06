@@ -49,6 +49,14 @@ CONFIGKEY_SERVER_REDIRECT_PATH = ("server", "redirect_path")
 CONFIGKEY_SERVER_LINK_PATH = ("server", "link_path")
 # ### END CONFIGURATION ### #
 
+class OAuth2UtilServer(HTTPServer):
+    """
+    Basically just adding another init variable
+    :type authorize_url: str
+    """
+    def __init__(self, server_adress, handler_class, authorize_url, bind_and_activate=True):
+        super().__init__(server_adress, handler_class, bind_and_activate)
+        self.authorize_url = authorize_url
 
 class OAuth2UtilRequestHandler(BaseHTTPRequestHandler):
 
@@ -217,10 +225,7 @@ class OAuth2Util:
 		Start the webserver that will receive the code
 		"""
 		server_address = (SERVER_URL, SERVER_PORT)
-		self.server = HTTPServer(server_address, OAuth2UtilRequestHandler)
-		self.server.oauth2util = self
-		self.response_code = None
-		self.authorize_url = authorize_url
+		self.server = HTTPServer(server_address, OAuth2UtilRequestHandler, authorize_url)
 		t = Thread(target=self.server.serve_forever)
 		t.daemon = True
 		t.start()
