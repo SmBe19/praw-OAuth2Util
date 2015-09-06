@@ -238,16 +238,14 @@ class OAuth2Util:
 		"""
 		Request new access information from reddit using the built in webserver
 		"""
-		try:
-			url = self.r.get_authorize_url(
-				"SomeRandomState", self._get_value(CONFIGKEY_SCOPE, set, split_val=","),
-				self._get_value(CONFIGKEY_REFRESHABLE, as_boolean=True))
-		except praw.errors.OAuthAppRequired:
-			print(
-				"Cannot obtain authorize url from praw. Please check your "
-				"configuration files.")
-			raise
-
+		if not self.r.has_oauth_app_info:
+			if self._print: print('Cannot obtain authorize url from PRAW. Please check your configuration.')
+			raise AttributeError('Reddit Session invalid, please check your designated config file.')
+		# v This is dirty and reads every time the config file. Please assign proper variables within the object.
+		url = self.r.get_authorize_url('This state needs to be clarified. Best is a username.',
+						self._get_value(CONFIGKEY_SCOPE, set, split_val=','),
+						self._get_value(CONFIGKEY_REFRESHABLE, as_boolean=True))
+		
 		self._start_webserver(url)
 		if not self._get_value(CONFIGKEY_SERVER_MODE, as_boolean=True):
 			webbrowser.open(url)
