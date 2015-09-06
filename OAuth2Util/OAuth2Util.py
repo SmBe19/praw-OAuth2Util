@@ -289,24 +289,31 @@ class OAuth2Util:
 		if self._print:
 			print('OAuth2Util printing on')
 
-	def set_access_credentials(self):
+	def set_access_credentials(self, __retry=0):
 		"""
 		Set the token on the Reddit Object again
 		"""
+		if __retry >= 5:
+			raise ConnectionAbortedError('Reddit is not accessible right now, cannot refresh OAuth2 tokens.')
+			
 		self._check_token_present()
 
 		try:
 			self.r.set_access_credentials(self._get_value(CONFIGKEY_SCOPE, set, split_val=","),
 										  self._get_value(CONFIGKEY_TOKEN),
 										  self._get_value(CONFIGKEY_REFRESH_TOKEN))
-		except (praw.errors.OAuthInvalidToken, praw.errors.HTTPException):
+		except praw.errors.OAuthInvalidToken:
 			if self._print:
 				print("Request new Token (SAC)")
 			self._get_new_access_information()
+		except  praw.errors.HTTPException:
+			if self._print: print('Retrying in 5s.')
+			time.sleep(5)
+			self.set_access_credentials(__retry=__retry + 1)
 
 	# ### REFRESH TOKEN ### #
 
-	def refresh(self, force=False):
+	def refresh(self, force=False, __retry=0):
 		"""
 		Check if the token is still valid and requests a new if it is not
 		valid anymore
@@ -316,6 +323,8 @@ class OAuth2Util:
 
 		force: if true, a new token will be retrieved no matter what
 		"""
+		if __retry >= 5:
+			raise ConnectionAbortedError('Reddit is not accessible right now, cannot refresh OAuth2 tokens.')
 		self._check_token_present()
 
 		# We check whether another instance already refreshed the token
@@ -334,7 +343,11 @@ class OAuth2Util:
 				self._change_value(CONFIGKEY_TOKEN, new_token["access_token"])
 				self._change_value(CONFIGKEY_VALID_UNTIL, time.time() + TOKEN_VALID_DURATION)
 				self.set_access_credentials()
-			except (praw.errors.OAuthInvalidToken, praw.errors.HTTPException):
+			except praw.errors.OAuthInvalidToken:
 				if self._print:
 					print("Request new Token (REF)")
 				self._get_new_access_information()
+			except praw.errors.HTTPException:
+				if self._print: print('Retrying in 5s.')
+				time.sleep(5)
+				self.refresh(__retry=__retry + 1)
