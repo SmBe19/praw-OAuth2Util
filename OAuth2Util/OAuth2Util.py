@@ -56,6 +56,7 @@ class OAuth2UtilServer(HTTPServer):
     """
     def __init__(self, server_adress, handler_class, authorize_url, bind_and_activate=True):
         super().__init__(server_adress, handler_class, bind_and_activate)
+        self.response_code = None
         self.authorize_url = authorize_url
 
 class OAuth2UtilRequestHandler(BaseHTTPRequestHandler):
@@ -225,7 +226,7 @@ class OAuth2Util:
 		Start the webserver that will receive the code
 		"""
 		server_address = (SERVER_URL, SERVER_PORT)
-		self.server = HTTPServer(server_address, OAuth2UtilRequestHandler, authorize_url)
+		self.server = OAuth2UtilServer(server_address, OAuth2UtilRequestHandler, authorize_url)
 		t = Thread(target=self.server.serve_forever)
 		t.daemon = True
 		t.start()
@@ -234,7 +235,7 @@ class OAuth2Util:
 		"""
 		Wait until the user accepted or rejected the request
 		"""
-		while not self.response_code:
+		while not self.server.response_code:
 			time.sleep(2)
 		time.sleep(5)
 		self.server.shutdown()
