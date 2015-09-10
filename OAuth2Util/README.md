@@ -60,3 +60,12 @@ OAuth2Util uses one config file to store the information. Before you can use it,
 	token=None
 	refresh_token=None
 	valid_until=0
+
+## Known Inconveniences
+There are two small inconveniences with OAuth2Util:
+
+### Your default browser can't be Microsoft Edge
+This is an issue with Python, not OAuth2Util. Sometimes a built in python function that OAuth2Util uses to print out the callback info will detect Microsoft Edge as Opera, but then fail later when a file named "opera.bat" is not found, or something within that bat file will go wrong since it was not meant for Microsoft Edge. To resolve this, change your default browser to anything but Edge. You can change it back after initial token retreival has taken place.
+
+### Rarely, OAuth2Util.OAuth2Util(r) will fail due to left open sockets
+This is a very rare occurence and you will probably never see this issue. Most of the time it is caused if you had called `OAuth2Util.OAuth2Util(r)` on an older version, updated, and then called it again sometime later on. Otherwise the socket was kept open by some other software and was never closed. However, if and when this occurs, the previously opened sockets will close themselves, and you can call `OAuth2Util.OAuth2Util(r)` again with no problem.
