@@ -49,6 +49,15 @@ CONFIGKEY_SERVER_REDIRECT_PATH = ("server", "redirect_path")
 CONFIGKEY_SERVER_LINK_PATH = ("server", "link_path")
 # ### END CONFIGURATION ### #
 
+class OAuth2UtilServer(HTTPServer):
+    """
+    Basically just adding another init variable
+    :type authorize_url: str
+    """
+    def __init__(self, server_adress, handler_class, authorize_url, bind_and_activate=True):
+        super().__init__(server_adress, handler_class, bind_and_activate)
+        self.response_code = None
+        self.authorize_url = authorize_url
 
 class OAuth2UtilRequestHandler(BaseHTTPRequestHandler):
 
@@ -217,10 +226,7 @@ class OAuth2Util:
 		Start the webserver that will receive the code
 		"""
 		server_address = (SERVER_URL, SERVER_PORT)
-		self.server = HTTPServer(server_address, OAuth2UtilRequestHandler)
-		self.server.oauth2util = self
-		self.response_code = None
-		self.authorize_url = authorize_url
+		self.server = OAuth2UtilServer(server_address, OAuth2UtilRequestHandler, authorize_url)
 		t = Thread(target=self.server.serve_forever)
 		t.daemon = True
 		t.start()
@@ -229,7 +235,7 @@ class OAuth2Util:
 		"""
 		Wait until the user accepted or rejected the request
 		"""
-		while not self.response_code:
+		while not self.server.response_code:
 			time.sleep(2)
 		time.sleep(5)
 		self.server.shutdown()
@@ -238,16 +244,14 @@ class OAuth2Util:
 		"""
 		Request new access information from reddit using the built in webserver
 		"""
-		try:
-			url = self.r.get_authorize_url(
-				"SomeRandomState", self._get_value(CONFIGKEY_SCOPE, set, split_val=","),
-				self._get_value(CONFIGKEY_REFRESHABLE, as_boolean=True))
-		except praw.errors.OAuthAppRequired:
-			print(
-				"Cannot obtain authorize url from praw. Please check your "
-				"configuration files.")
-			raise
-
+		if not self.r.has_oauth_app_info:
+			if self._print: print('Cannot obtain authorize url from PRAW. Please check your configuration.')
+			raise AttributeError('Reddit Session invalid, please check your designated config file.')
+		# v This is dirty and reads every time the config file. Please assign proper variables within the object.
+		url = self.r.get_authorize_url('This state needs to be clarified. Best is a username.',
+						self._get_value(CONFIGKEY_SCOPE, set, split_val=','),
+						self._get_value(CONFIGKEY_REFRESHABLE, as_boolean=True))
+		
 		self._start_webserver(url)
 		if not self._get_value(CONFIGKEY_SERVER_MODE, as_boolean=True):
 			webbrowser.open(url)
@@ -275,13 +279,10 @@ class OAuth2Util:
 		"""
 		Check whether the tokens are set and request new ones if not
 		"""
-		try:
-			self._get_value(CONFIGKEY_TOKEN)
-			self._get_value(CONFIGKEY_REFRESH_TOKEN)
-			self._get_value(CONFIGKEY_REFRESHABLE)
-		except KeyError:
-			if self._print:
-				print("Request new Token (CTP)")
+		options = self.config.items(CONFIGKEY_TOKEN[0])
+		check_values = (CONFIGKEY_TOKEN[1], CONFIGKEY_REFRESH_TOKEN[1], CONFIGKEY_REFRESHABLE[1])
+		if not all(value in options for value in check_values):
+			if self._print: print('Request new token (CTP)')
 			self._get_new_access_information()
 
 	# ### PUBLIC API ### #
@@ -294,24 +295,31 @@ class OAuth2Util:
 		if self._print:
 			print('OAuth2Util printing on')
 
-	def set_access_credentials(self):
+	def set_access_credentials(self, __retry=0):
 		"""
 		Set the token on the Reddit Object again
 		"""
+		if __retry >= 5:
+			raise ConnectionAbortedError('Reddit is not accessible right now, cannot refresh OAuth2 tokens.')
+			
 		self._check_token_present()
 
 		try:
 			self.r.set_access_credentials(self._get_value(CONFIGKEY_SCOPE, set, split_val=","),
 										  self._get_value(CONFIGKEY_TOKEN),
 										  self._get_value(CONFIGKEY_REFRESH_TOKEN))
-		except (praw.errors.OAuthInvalidToken, praw.errors.HTTPException):
+		except praw.errors.OAuthInvalidToken:
 			if self._print:
 				print("Request new Token (SAC)")
 			self._get_new_access_information()
+		except  praw.errors.HTTPException:
+			if self._print: print('Retrying in 5s.')
+			time.sleep(5)
+			self.set_access_credentials(__retry=__retry + 1)
 
 	# ### REFRESH TOKEN ### #
 
-	def refresh(self, force=False):
+	def refresh(self, force=False, __retry=0):
 		"""
 		Check if the token is still valid and requests a new if it is not
 		valid anymore
@@ -321,6 +329,8 @@ class OAuth2Util:
 
 		force: if true, a new token will be retrieved no matter what
 		"""
+		if __retry >= 5:
+			raise ConnectionAbortedError('Reddit is not accessible right now, cannot refresh OAuth2 tokens.')
 		self._check_token_present()
 
 		# We check whether another instance already refreshed the token
@@ -339,7 +349,11 @@ class OAuth2Util:
 				self._change_value(CONFIGKEY_TOKEN, new_token["access_token"])
 				self._change_value(CONFIGKEY_VALID_UNTIL, time.time() + TOKEN_VALID_DURATION)
 				self.set_access_credentials()
-			except (praw.errors.OAuthInvalidToken, praw.errors.HTTPException):
+			except praw.errors.OAuthInvalidToken:
 				if self._print:
 					print("Request new Token (REF)")
 				self._get_new_access_information()
+			except praw.errors.HTTPException:
+				if self._print: print('Retrying in 5s.')
+				time.sleep(5)
+				self.refresh(__retry=__retry + 1)
