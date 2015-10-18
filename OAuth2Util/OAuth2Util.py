@@ -78,7 +78,7 @@ class OAuth2UtilRequestHandler(BaseHTTPRequestHandler):
 				self.wfile.write("No code found, try again!".encode("utf-8"))
 				return
 
-			self.server.oauth2util.response_code = parsed_query["code"][0]
+			self.server.response_code = parsed_query["code"][0]
 
 			self.send_response(200)
 			self.send_header("Content-Type", "text/plain")
@@ -247,11 +247,10 @@ class OAuth2Util:
 		if not self.r.has_oauth_app_info:
 			if self._print: print('Cannot obtain authorize url from PRAW. Please check your configuration.')
 			raise AttributeError('Reddit Session invalid, please check your designated config file.')
-		# v This is dirty and reads every time the config file. Please assign proper variables within the object.
-		url = self.r.get_authorize_url('This state needs to be clarified. Best is a username.',
+		url = self.r.get_authorize_url('SomeRandomState',
 						self._get_value(CONFIGKEY_SCOPE, set, split_val=','),
 						self._get_value(CONFIGKEY_REFRESHABLE, as_boolean=True))
-		
+
 		self._start_webserver(url)
 		if not self._get_value(CONFIGKEY_SERVER_MODE, as_boolean=True):
 			webbrowser.open(url)
@@ -263,7 +262,7 @@ class OAuth2Util:
 
 		try:
 			access_information = self.r.get_access_information(
-				self.response_code)
+				self.server.response_code)
 		except praw.errors.OAuthException:
 			print("--------------------------------")
 			print("Can not authenticate, maybe the app infos (e.g. secret) "
@@ -279,10 +278,13 @@ class OAuth2Util:
 		"""
 		Check whether the tokens are set and request new ones if not
 		"""
-		options = self.config.items(CONFIGKEY_TOKEN[0])
-		check_values = (CONFIGKEY_TOKEN[1], CONFIGKEY_REFRESH_TOKEN[1], CONFIGKEY_REFRESHABLE[1])
-		if not all(value in options for value in check_values):
-			if self._print: print('Request new token (CTP)')
+		try:
+			self._get_value(CONFIGKEY_TOKEN)
+			self._get_value(CONFIGKEY_REFRESH_TOKEN)
+			self._get_value(CONFIGKEY_REFRESHABLE)
+		except KeyError:
+			if self._print:
+				print("Request new Token (CTP)")
 			self._get_new_access_information()
 
 	# ### PUBLIC API ### #
@@ -295,31 +297,32 @@ class OAuth2Util:
 		if self._print:
 			print('OAuth2Util printing on')
 
-	def set_access_credentials(self, __retry=0):
+	def set_access_credentials(self, _retry=0):
 		"""
 		Set the token on the Reddit Object again
 		"""
-		if __retry >= 5:
+		if _retry >= 5:
 			raise ConnectionAbortedError('Reddit is not accessible right now, cannot refresh OAuth2 tokens.')
-			
+
 		self._check_token_present()
 
 		try:
 			self.r.set_access_credentials(self._get_value(CONFIGKEY_SCOPE, set, split_val=","),
 										  self._get_value(CONFIGKEY_TOKEN),
 										  self._get_value(CONFIGKEY_REFRESH_TOKEN))
-		except praw.errors.OAuthInvalidToken:
+		except (praw.errors.OAuthInvalidToken, praw.errors.HTTPException) as e:
+			# todo check e status code
+			# if self._print: print('Retrying in 5s.')
+			# time.sleep(5)
+			# self.set_access_credentials(_retry=_retry + 1)
+
 			if self._print:
 				print("Request new Token (SAC)")
 			self._get_new_access_information()
-		except  praw.errors.HTTPException:
-			if self._print: print('Retrying in 5s.')
-			time.sleep(5)
-			self.set_access_credentials(__retry=__retry + 1)
 
 	# ### REFRESH TOKEN ### #
 
-	def refresh(self, force=False, __retry=0):
+	def refresh(self, force=False, _retry=0):
 		"""
 		Check if the token is still valid and requests a new if it is not
 		valid anymore
@@ -329,7 +332,7 @@ class OAuth2Util:
 
 		force: if true, a new token will be retrieved no matter what
 		"""
-		if __retry >= 5:
+		if _retry >= 5:
 			raise ConnectionAbortedError('Reddit is not accessible right now, cannot refresh OAuth2 tokens.')
 		self._check_token_present()
 
@@ -349,11 +352,12 @@ class OAuth2Util:
 				self._change_value(CONFIGKEY_TOKEN, new_token["access_token"])
 				self._change_value(CONFIGKEY_VALID_UNTIL, time.time() + TOKEN_VALID_DURATION)
 				self.set_access_credentials()
-			except praw.errors.OAuthInvalidToken:
+			except (praw.errors.OAuthInvalidToken, praw.errors.HTTPException) as e:
+				# todo check e status code
+				# if self._print: print('Retrying in 5s.')
+				# time.sleep(5)
+				# self.refresh(_retry=_retry + 1)
+
 				if self._print:
 					print("Request new Token (REF)")
 				self._get_new_access_information()
-			except praw.errors.HTTPException:
-				if self._print: print('Retrying in 5s.')
-				time.sleep(5)
-				self.refresh(__retry=__retry + 1)
