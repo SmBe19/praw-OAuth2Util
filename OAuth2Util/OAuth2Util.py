@@ -247,7 +247,7 @@ class OAuth2Util:
 		if not self.r.has_oauth_app_info:
 			if self._print: print('Cannot obtain authorize url from PRAW. Please check your configuration.')
 			raise AttributeError('Reddit Session invalid, please check your designated config file.')
-		url = self.r.get_authorize_url('SomeRandomState',
+		url = self.r.get_authorize_url('UsingOAuth2Util',
 						self._get_value(CONFIGKEY_SCOPE, set, split_val=','),
 						self._get_value(CONFIGKEY_REFRESHABLE, as_boolean=True))
 
@@ -337,14 +337,15 @@ class OAuth2Util:
 		self._check_token_present()
 
 		# We check whether another instance already refreshed the token
-		if time.time() > self._get_value(CONFIGKEY_VALID_UNTIL, float) - REFRESH_MARGIN:
+		if time.time() > self._get_value(CONFIGKEY_VALID_UNTIL, float, exception_default=0) - REFRESH_MARGIN:
 			self.config.read(self.configfile)
-			if time.time() < self._get_value(CONFIGKEY_VALID_UNTIL, float) - REFRESH_MARGIN:
+
+			if time.time() < self._get_value(CONFIGKEY_VALID_UNTIL, float, exception_default=0) - REFRESH_MARGIN:
 				if self._print:
 					print("Found new token")
 				self.set_access_credentials()
 
-		if force or time.time() > self._get_value(CONFIGKEY_VALID_UNTIL, float) - REFRESH_MARGIN:
+		if force or time.time() > self._get_value(CONFIGKEY_VALID_UNTIL, float, exception_default=0) - REFRESH_MARGIN:
 			if self._print:
 				print("Refresh Token")
 			try:
