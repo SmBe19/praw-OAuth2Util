@@ -49,15 +49,6 @@ CONFIGKEY_SERVER_REDIRECT_PATH = ("server", "redirect_path")
 CONFIGKEY_SERVER_LINK_PATH = ("server", "link_path")
 # ### END CONFIGURATION ### #
 
-class OAuth2UtilServer(HTTPServer):
-    """
-    Basically just adding another init variable
-    :type authorize_url: str
-    """
-    def __init__(self, server_adress, handler_class, authorize_url, bind_and_activate=True):
-        super().__init__(server_adress, handler_class, bind_and_activate)
-        self.response_code = None
-        self.authorize_url = authorize_url
 
 class OAuth2UtilRequestHandler(BaseHTTPRequestHandler):
 
@@ -93,7 +84,7 @@ class OAuth2UtilRequestHandler(BaseHTTPRequestHandler):
 			self.end_headers()
 
 			self.wfile.write("<html><body>Hey there!<br/>Click <a href=\"{0}\">here</a> to claim your prize.</body></html>"
-				.format(self.server.oauth2util.authorize_url).encode("utf-8"))
+				.format(self.server.authorize_url).encode("utf-8"))
 		else:
 			self.send_response(404)
 			self.send_header("Content-Type", "text/plain")
@@ -226,7 +217,9 @@ class OAuth2Util:
 		Start the webserver that will receive the code
 		"""
 		server_address = (SERVER_URL, SERVER_PORT)
-		self.server = OAuth2UtilServer(server_address, OAuth2UtilRequestHandler, authorize_url)
+		self.server = HTTPServer(server_address, OAuth2UtilRequestHandler)
+		self.server.response_code = None
+		self.server.authorize_url = authorize_url
 		t = Thread(target=self.server.serve_forever)
 		t.daemon = True
 		t.start()
