@@ -13,12 +13,14 @@ try:
 	import configparser
 	from http.server import HTTPServer, BaseHTTPRequestHandler
 	from urllib.parse import urlparse, parse_qs
+	FNFError = FileNotFoundError
 except ImportError:
 	# Python 2.x
 	import ConfigParser as configparser
 	from SimpleHTTPServer import SimpleHTTPRequestHandler as BaseHTTPRequestHandler
 	from SocketServer import TCPServer as HTTPServer
 	from urlparse import urlparse, parse_qs
+	FNFError = IOError
 
 
 # ### CONFIGURATION ### #
@@ -114,7 +116,7 @@ class OAuth2Util:
 				if os.path.isfile("oauth.txt"):
 					needMigration = "oauth.txt"
 				else:
-					raise FileNotFoundError("File " + configfile + " not found")
+					raise FNFError("File " + configfile + " not found")
 		except configparser.MissingSectionHeaderError:
 			needMigration = configfile
 
