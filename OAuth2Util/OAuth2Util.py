@@ -34,7 +34,7 @@ try:
 	DEFAULT_CONFIG = os.path.join(os.path.dirname(os.path.abspath(main.__file__)), "oauth.ini")
 except AttributeError:
 	# running interactive
-	DEFAULT_CONFIG = os.path.join(os.path.dirname(os.path.abspath(".")), "oauth.ini")
+	DEFAULT_CONFIG = os.path.abspath("oauth.ini")
 
 CONFIGKEY_APP_KEY = ("app", "app_key")
 CONFIGKEY_APP_SECRET = ("app", "app_secret")
