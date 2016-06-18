@@ -2,10 +2,13 @@
 
 from setuptools import setup, find_packages
 
+def read(fname):
+    return open(os.path.join(os.path.dirname(__file__), fname)).read()
+
 with open('requirements.txt') as f:
     requirements = f.read().splitlines()
 
-version = '0.3.4'
+version = '0.3.5'
 
 setup(
     name='praw-oauth2util',
@@ -18,8 +21,9 @@ setup(
     url='https://github.com/SmBe19/praw-OAuth2Util/',
     license='MIT',
     description='OAuth2 wrapper for PRAW',
+    long_description=read("README_PyPi.md"),
     classifiers=[
-        'Development Status :: 4 - Beta',
+        'Development Status :: 5 - Production/Stable',
         'License :: OSI Approved :: MIT License',
         'Operating System :: POSIX',
         'Intended Audience :: Developers',
@@ -31,6 +35,7 @@ setup(
         'Programming Language :: Python :: 3.3',
         'Programming Language :: Python :: 3.4',
         'Programming Language :: Python :: 3.5',
+        'Programming Language :: Python :: 3.6',
         'Topic :: Internet',
         'Topic :: Software Development :: Libraries',
         'Topic :: Software Development :: Libraries :: Python Modules',

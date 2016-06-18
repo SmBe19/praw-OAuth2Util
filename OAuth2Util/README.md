@@ -9,7 +9,7 @@ In your code you can use it like this:
 	r = praw.Reddit("Useragent")
 	o = OAuth2Util.OAuth2Util(r)
 
-That's it! To refresh the token (it is only valid for one hour), use `o.refresh()`. This checks first whether the token is still valid and doesn't request a new one if it is still valid. So you can call this method befor every block of PRAW usage. Example:
+That's it! To refresh the token (it is only valid for one hour), use `o.refresh()`. This checks first whether the token is still valid and doesn't request a new one if it is still valid. So you can call this method before every block of PRAW usage. Example:
 
 	while True:
 		o.refresh()
@@ -39,6 +39,9 @@ In order to use OAuth2, you have to create an App on Reddit (https://www.reddit.
 # Server Mode
 Add a line `server_mode=True` to your config file or initialize with `o = OAuth2Util.OAuth2Util(r, server_mode=True)` to activate server mode. This mode is designed for use where the script doesn't run locally but runs on a remote server instead. In this scenario it's not really helpful to open a webbrowser on the server, is it? If server mode is activated you can open a page in your local browser where you can click a link for the authorization. By default this page is `127.0.0.1:65010/oauth` but you can change those values in the config file.
 
+# Logging
+There are several ways to get information from OAuth2Util. You can let it print messages directly to the console using `print_log` in the constructor or later calling `toggle_print()`. This is the easiest way to get information about what is happening. The other method is to use the Python logging API. Use `get_logger()` to get the logger used by the library. See [LogDemo.py](LogDemo.py) to see a working example.
+
 ## Config
 OAuth2Util uses one config file to store the information. Before you can use it, the first two sections must be filled out manually by you, the third one will automatically be filled out when you authorize the script. Your `oauth.ini` should contain these lines:
 
@@ -66,7 +69,7 @@ OAuth2Util uses one config file to store the information. Before you can use it,
 There are two small inconveniences with OAuth2Util:
 
 ### Your default browser can't be Microsoft Edge
-This is an issue with Python, not OAuth2Util. Sometimes a built in python function that OAuth2Util uses to print out the callback info will detect Microsoft Edge as Opera, but then fail later when a file named "opera.bat" is not found, or something within that bat file will go wrong since it was not meant for Microsoft Edge. To resolve this, change your default browser to anything but Edge. You can change it back after initial token retreival has taken place.
+This is an issue with Python, not OAuth2Util. Sometimes a built in python function that OAuth2Util uses to print out the callback info will detect Microsoft Edge as Opera, but then fail later when a file named "opera.bat" is not found, or something within that bat file will go wrong since it was not meant for Microsoft Edge. To resolve this, change your default browser to anything but Edge. You can change it back after initial token retrieval has taken place.
 
 ### Rarely, OAuth2Util.OAuth2Util(r) will fail due to left open sockets
-This is a very rare occurence and you will probably never see this issue. Most of the time it is caused if you had called `OAuth2Util.OAuth2Util(r)` on an older version, updated, and then called it again sometime later on. Otherwise the socket was kept open by some other software and was never closed. However, if and when this occurs, the previously opened sockets will close themselves, and you can call `OAuth2Util.OAuth2Util(r)` again with no problem.
+This is a very rare occurrence and you will probably never see this issue. Most of the time it is caused if you had called `OAuth2Util.OAuth2Util(r)` on an older version, updated, and then called it again sometime later on. Otherwise the socket was kept open by some other software and was never closed. However, if and when this occurs, the previously opened sockets will close themselves, and you can call `OAuth2Util.OAuth2Util(r)` again with no problem.

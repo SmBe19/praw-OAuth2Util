@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 from __future__ import print_function
 
+import logging
 import praw
 import os
 import re
@@ -106,6 +107,9 @@ class OAuth2Util:
 		self.r = reddit
 		self.server = None
 
+		self._print = print_log
+		self.log = get_logger()
+
 		self.configfile = configfile
 
 		self.config = configparser.ConfigParser()
@@ -149,11 +153,14 @@ class OAuth2Util:
 		SERVER_REDIRECT_PATH = self._get_value(CONFIGKEY_SERVER_REDIRECT_PATH, exception_default=SERVER_REDIRECT_PATH)
 		SERVER_LINK_PATH = self._get_value(CONFIGKEY_SERVER_LINK_PATH, exception_default=SERVER_LINK_PATH)
 
-		self._print = print_log
-
 		self._set_app_info()
 		self.refresh()
 		self.set_access_credentials()
+
+	def _log(self, msg, level=logging.INFO,  *args, **kwargs):
+		if(self._print):
+			print(msg % (args))
+		self.log.log(level, msg, *args, **kwargs)
 
 	# ### LOAD SETTINGS ### #
 
@@ -202,15 +209,13 @@ class OAuth2Util:
 		"""
 		Migrates the old config file format to the new one
 		"""
-		print("Your OAuth2Util config file is in an old format and needs "
-			"to be changed. I tried as best as I could to migrate it.")
+		self._log("Your OAuth2Util config file is in an old format and needs "
+				"to be changed. I tried as best as I could to migrate it.", logging.WARNING)
 
 		with open(oldname, "r") as old:
 			with open(newname, "w") as new:
 				new.write("[app]\n")
 				new.write(old.read())
-
-	# ### SAVE SETTINGS ### #
 
 	# ### REQUEST FIRST TOKEN ### #
 
@@ -240,7 +245,7 @@ class OAuth2Util:
 		Request new access information from reddit using the built in webserver
 		"""
 		if not self.r.has_oauth_app_info:
-			if self._print: print('Cannot obtain authorize url from PRAW. Please check your configuration.')
+			self._log('Cannot obtain authorize url from PRAW. Please check your configuration.', logging.ERROR)
 			raise AttributeError('Reddit Session invalid, please check your designated config file.')
 		url = self.r.get_authorize_url('UsingOAuth2Util',
 						self._get_value(CONFIGKEY_SCOPE, set, split_val=','),
@@ -259,10 +264,7 @@ class OAuth2Util:
 			access_information = self.r.get_access_information(
 				self.server.response_code)
 		except praw.errors.OAuthException:
-			print("--------------------------------")
-			print("Can not authenticate, maybe the app infos (e.g. secret) "
-					"are wrong.")
-			print("--------------------------------")
+			self._log("Can not authenticate, maybe the app infos (e.g. secret) are wrong.", logging.ERROR)
 			raise
 
 		self._change_value(CONFIGKEY_TOKEN, access_information["access_token"])
@@ -278,8 +280,7 @@ class OAuth2Util:
 			self._get_value(CONFIGKEY_REFRESH_TOKEN)
 			self._get_value(CONFIGKEY_REFRESHABLE)
 		except KeyError:
-			if self._print:
-				print("Request new Token (CTP)")
+			self._log("Request new Token (CTP)")
 			self._get_new_access_information()
 
 	# ### PUBLIC API ### #
@@ -307,12 +308,11 @@ class OAuth2Util:
 										  self._get_value(CONFIGKEY_REFRESH_TOKEN))
 		except (praw.errors.OAuthInvalidToken, praw.errors.HTTPException) as e:
 			# todo check e status code
-			# if self._print: print('Retrying in 5s.')
+			# self._log('Retrying in 5s.')
 			# time.sleep(5)
 			# self.set_access_credentials(_retry=_retry + 1)
 
-			if self._print:
-				print("Request new Token (SAC)")
+			self._log("Request new Token (SAC)")
 			self._get_new_access_information()
 
 	# ### REFRESH TOKEN ### #
@@ -336,13 +336,11 @@ class OAuth2Util:
 			self.config.read(self.configfile)
 
 			if time.time() < self._get_value(CONFIGKEY_VALID_UNTIL, float, exception_default=0) - REFRESH_MARGIN:
-				if self._print:
-					print("Found new token")
+				self._log("Found new token")
 				self.set_access_credentials()
 
 		if force or time.time() > self._get_value(CONFIGKEY_VALID_UNTIL, float, exception_default=0) - REFRESH_MARGIN:
-			if self._print:
-				print("Refresh Token")
+			self._log("Refresh Token")
 			try:
 				new_token = self.r.refresh_access_information(self._get_value(CONFIGKEY_REFRESH_TOKEN))
 				self._change_value(CONFIGKEY_TOKEN, new_token["access_token"])
@@ -350,10 +348,17 @@ class OAuth2Util:
 				self.set_access_credentials()
 			except (praw.errors.OAuthInvalidToken, praw.errors.HTTPException) as e:
 				# todo check e status code
-				# if self._print: print('Retrying in 5s.')
+				# self._log('Retrying in 5s.')
 				# time.sleep(5)
 				# self.refresh(_retry=_retry + 1)
 
-				if self._print:
-					print("Request new Token (REF)")
+				self._log("Request new Token (REF)")
 				self._get_new_access_information()
+
+# "Static" methods
+
+def get_logger():
+	"""
+	Get the logger used by OAuth2Util
+	"""
+	return logging.getLogger(__name__)
