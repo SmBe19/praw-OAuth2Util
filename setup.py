@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 from setuptools import setup, find_packages
+import os
 
 def read(fname):
     return open(os.path.join(os.path.dirname(__file__), fname)).read()
@@ -21,7 +22,7 @@ setup(
     url='https://github.com/SmBe19/praw-OAuth2Util/',
     license='MIT',
     description='OAuth2 wrapper for PRAW',
-    long_description=read("README_PyPi.md"),
+    long_description=read("README_PyPi.rst"),
     classifiers=[
         'Development Status :: 5 - Production/Stable',
         'License :: OSI Approved :: MIT License',
