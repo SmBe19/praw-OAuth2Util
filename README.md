@@ -11,5 +11,6 @@ OAuth2Util is available on PyPi: `pip install praw-oauth2util`
  - [Define_It](https://github.com/Spedwards/RedditBots/tree/master/Define_It) - Spedwards
  - [reddit-flair-bot](https://github.com/gavin19/reddit-flair-bot) - gavin19
  - [Markdown Fixer](https://github.com/braeden123/MarkdownFixer) - bsmith0
+ - [Episode Bot](https://github.com/Almenon/reddit_episode_bot) - Almenon
 
 Fork and add your own to the list.
